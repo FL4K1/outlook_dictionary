@@ -106,6 +106,4 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # --- Routers ---
     app.include_router(health_router)
 
-
-
     return app

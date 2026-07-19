@@ -11,6 +11,7 @@ from __future__ import annotations
 import time
 import uuid
 from typing import TYPE_CHECKING, ClassVar
+
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
@@ -29,9 +30,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     - Binds it to structlog's contextvars for automatic inclusion in all logs.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         request.state.request_id = request_id
 
@@ -52,9 +51,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
     SKIP_PATHS: ClassVar[set[str]] = {"/health/live", "/health/ready", "/health/deep"}
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in self.SKIP_PATHS:
             return await call_next(request)
 
@@ -80,9 +77,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard security headers to every response."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"

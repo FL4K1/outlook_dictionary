@@ -132,6 +132,8 @@ def _get_text_payload(part: email.message.Message) -> str:  # type: ignore[type-
     payload = part.get_payload(decode=True)
     if payload is None:
         return ""
+    if not isinstance(payload, bytes):
+        return str(payload)
     charset = part.get_content_charset() or "utf-8"
     try:
         return payload.decode(charset, errors="replace")
@@ -143,7 +145,8 @@ def _extract_attachment(part: email.message.Message) -> ParsedAttachment:  # typ
     """Extract an attachment from a MIME part."""
     filename = part.get_filename() or "unnamed_attachment"
     content_type = part.get_content_type()
-    content = part.get_payload(decode=True) or b""
+    payload = part.get_payload(decode=True)
+    content = payload if isinstance(payload, bytes) else b""
     content_id = part.get("Content-ID")
     is_inline = "inline" in str(part.get("Content-Disposition", ""))
 
