@@ -1,6 +1,66 @@
-.venv/
+# ===========================
+# Python
+# ===========================
 __pycache__/
-*.pyc
-msal_token_cache.bin
-config.py
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# ===========================
+# IDE / Editor
+# ===========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===========================
+# Environment & Secrets
+# ===========================
 .env
+.env.local
+.env.*.local
+!.env.example
+msal_token_cache.bin
+
+# ===========================
+# Testing
+# ===========================
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===========================
+# Docker
+# ===========================
+infra/docker/data/
+
+# ===========================
+# Node / Frontend
+# ===========================
+node_modules/
+.next/
+out/
+apps/web/.env.local
+
+# ===========================
+# OS
+# ===========================
+*.log
+*.tmp

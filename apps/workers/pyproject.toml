@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mip-workers"
+version = "0.1.0"
+description = "Mail Intelligence Platform — Background task workers (sync, indexer, embedder)"
+requires-python = ">=3.12"
+dependencies = [
+    "redis>=5.2.0",
+    "mip-models",
+    "mip-providers",
+    "mip-email-parser",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mip_workers"]

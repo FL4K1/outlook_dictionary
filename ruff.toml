@@ -1,0 +1,40 @@
+# Ruff configuration — single source of truth for Python linting and formatting.
+# Applied monorepo-wide.
+
+target-version = "py312"
+line-length = 100
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific rules
+    "S",    # flake8-bandit (security)
+    "T20",  # flake8-print (no print statements)
+    "PTH",  # flake8-use-pathlib
+    "ERA",  # eradicate (commented-out code)
+]
+ignore = [
+    "S101",   # assert allowed in tests
+    "B008",   # function calls in default args (FastAPI Depends)
+]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S101", "S106"]
+"**/alembic/**" = ["ERA001"]
+
+[lint.isort]
+known-first-party = ["app", "mip_models", "mip_providers", "mip_ai", "mip_email_parser"]

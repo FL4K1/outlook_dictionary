@@ -1,0 +1,122 @@
+# Mail Intelligence Platform — Local Development Infrastructure
+#
+# Usage:
+#   docker compose -f infra/docker/docker-compose.yml up -d
+#   (or: make docker-up)
+#
+# This file defines ALL infrastructure dependencies required for local
+# development. The API application itself runs on the host (not in Docker)
+# for hot-reload and debugging convenience.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mip-postgres
+    environment:
+      POSTGRES_USER: mip
+      POSTGRES_PASSWORD: mip_dev_password
+      POSTGRES_DB: mail_intelligence
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mip -d mail_intelligence"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mip-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: mip-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.name=mip-dev
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: mip-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../../
+      dockerfile: apps/api/Dockerfile
+    container_name: mip-api
+    ports:
+      - "8080:8000"
+    environment:
+      APP_ENV: development
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: mip
+      POSTGRES_PASSWORD: mip_dev_password
+      POSTGRES_DB: mail_intelligence
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    container_name: mip-web
+    ports:
+      - "3001:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  minio_data:

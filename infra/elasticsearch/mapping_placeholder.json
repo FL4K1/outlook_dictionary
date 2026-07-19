@@ -1,0 +1,41 @@
+{
+  "settings": {
+    "index": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1
+    },
+    "analysis": {
+      "analyzer": {
+        "email_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "asciifolding"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "tenant_id": {
+        "type": "keyword"
+      },
+      "message_id": {
+        "type": "keyword"
+      },
+      "subject": {
+        "type": "text",
+        "analyzer": "email_analyzer"
+      },
+      "body_text": {
+        "type": "text",
+        "analyzer": "email_analyzer"
+      },
+      "sender_email": {
+        "type": "keyword"
+      },
+      "date": {
+        "type": "date"
+      }
+    }
+  }
+}

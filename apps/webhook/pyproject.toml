@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mip-webhook"
+version = "0.1.0"
+description = "Mail Intelligence Platform — Lightweight webhook receiver"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "redis>=5.2.0",
+    "mip-providers",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mip_webhook"]

@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e "packages/models"
+          pip install -e "packages/providers"
+          pip install -e "packages/ai"
+          pip install -e "packages/email_parser"
+          pip install -e "apps/api[dev]"
+          pip install mypy types-redis
+
+      - name: MyPy
+        run: mypy packages/ apps/api/app/ --config-file pyproject.toml
+        continue-on-error: true  # Strict mode may have initial warnings
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e "packages/models"
+          pip install -e "packages/providers"
+          pip install -e "packages/ai"
+          pip install -e "packages/email_parser"
+          pip install -e "apps/api[dev]"
+
+      - name: Run tests
+        run: pytest apps/api/tests/ -v
+        env:
+          APP_ENV: testing
+
+  docker:
+    name: Docker Build Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile -t mip-api:ci .
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e "packages/models"
+          pip install -e "packages/providers"
+          pip install -e "packages/ai"
+          pip install -e "packages/email_parser"
+          pip install -e "apps/api"
+          pip install pip-audit
+
+      - name: Dependency vulnerability scan
+        run: pip-audit
+        continue-on-error: true  # Advisory only initially
