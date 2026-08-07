@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mip-api"
 version = "0.1.0"
-description = "Mail Intelligence Platform — FastAPI backend application"
+description = "Mail Intelligence Platform â€” FastAPI backend application"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
@@ -16,6 +16,7 @@ dependencies = [
     "redis>=5.2.0",
     "asyncpg>=0.30.0",
     "prometheus-client>=0.21.0",
+    "PyJWT>=2.8.0",
     "mip-models",
     "mip-providers",
     "mip-ai",

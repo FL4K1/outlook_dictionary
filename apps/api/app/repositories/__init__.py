@@ -1,5 +1,6 @@
 """Repository layer for database access."""
 
+from app.repositories.auth import SessionRepository
 from app.repositories.base import BaseRepository
 from app.repositories.core import (
     OrganizationRepository,
@@ -12,6 +13,7 @@ __all__ = [
     "BaseRepository",
     "OrganizationRepository",
     "RoleRepository",
+    "SessionRepository",
     "TenantRepository",
     "UserRepository",
 ]

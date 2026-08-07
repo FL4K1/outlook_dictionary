@@ -78,6 +78,7 @@ class User(Base, IdentityMixin, TimestampMixin, SoftDeleteMixin):
         "Membership",
         back_populates="user",
         cascade="all, delete-orphan",
+        foreign_keys="[Membership.user_id]",
     )
 
     sessions: Mapped[list[Session]] = relationship(

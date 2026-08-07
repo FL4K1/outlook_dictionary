@@ -12,7 +12,7 @@ from __future__ import annotations
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -78,6 +78,39 @@ class Settings(BaseSettings):
 
     # --- CORS ---
     cors_origins: list[str] = Field(default=["http://localhost:3000"])
+
+    # --- Authentication ---
+    jwt_signing_secret: str = Field(
+        default="dev-only-change-me-minimum-32-bytes",
+        description="Symmetric JWT signing secret for local development.",
+    )
+    jwt_algorithm: str = "HS256"
+    jwt_issuer: str = "mail-intelligence-platform"
+    jwt_audience: str = "mail-intelligence-api"
+    jwt_access_token_expire_minutes: int = 15
+    jwt_clock_skew_seconds: int = 60
+    jwt_refresh_token_expire_days: int = 30
+    session_idle_timeout_hours: int = 8
+    session_absolute_timeout_days: int = 30
+    session_remember_me_days: int = 90
+
+    @model_validator(mode="after")
+    def validate_token_settings(self) -> Settings:
+        """Validate token configuration fails closed before runtime use."""
+        allowed_algorithms = {"HS256"}
+        if self.jwt_algorithm not in allowed_algorithms:
+            msg = f"Unsupported JWT algorithm: {self.jwt_algorithm}"
+            raise ValueError(msg)
+
+        if len(self.jwt_signing_secret.encode("utf-8")) < 32:
+            msg = "JWT signing secret must be at least 32 bytes."
+            raise ValueError(msg)
+
+        if self.is_production and self.jwt_signing_secret == "dev-only-change-me-minimum-32-bytes":  # noqa: S105
+            msg = "Production JWT signing secret must not use the development default."
+            raise ValueError(msg)
+
+        return self
 
     @property
     def database_url(self) -> str:
