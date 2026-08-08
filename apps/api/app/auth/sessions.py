@@ -2,12 +2,16 @@
 
 Handles stateful session lifecycle, refresh rotation, revocation, idle timeout,
 absolute timeout, and refresh token reuse detection.
+
+SessionService is the single owner of session lifecycle behavior. Repositories
+expose persistence primitives only. All business rules, transaction orchestration,
+timeout decisions, replay detection, and event emission live here.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from app.auth.events import (
     SecurityEvent,
@@ -27,22 +31,32 @@ if TYPE_CHECKING:
 
     from app.auth.tokens import RefreshTokenPair, TokenService
     from app.common.config import Settings
-    from app.repositories.auth import SessionRepository
-    from mip_models.auth import Session
+    from app.repositories.auth import (
+        DeviceSessionRepository,
+        RefreshTokenFamilyRepository,
+    )
+    from mip_models.auth import DeviceSession
 
 logger = get_logger(__name__)
 
 
 class SessionService:
-    """Manages stateful database sessions and refresh token rotation."""
+    """Manages stateful database sessions and refresh token rotation.
+
+    All public methods correspond to business capabilities defined in the
+    PR-1.2.3 Implementation Contract. Private helpers encapsulate reusable
+    internal logic.
+    """
 
     def __init__(
         self,
-        repo: SessionRepository,
+        device_session_repo: DeviceSessionRepository,
+        refresh_token_family_repo: RefreshTokenFamilyRepository,
         token_service: TokenService,
         settings: Settings,
     ) -> None:
-        self.repo = repo
+        self.device_session_repo = device_session_repo
+        self.refresh_token_family_repo = refresh_token_family_repo
         self.token_service = token_service
         self.settings = settings
 
@@ -53,8 +67,24 @@ class SessionService:
         ip_address: str | None = None,
         user_agent: str | None = None,
         remember_me: bool = False,
-    ) -> tuple[Session, RefreshTokenPair]:
-        """Create a new session for a user."""
+    ) -> tuple[DeviceSession, RefreshTokenPair]:
+        """Create a new device session and issue a refresh token.
+
+        Transaction scope: single transaction creating the DeviceSession
+        and its initial RefreshTokenFamily epoch.
+
+        Args:
+            user_id: The platform user UUID.
+            tenant_id: The tenant UUID.
+            ip_address: Optional client IP address.
+            user_agent: Optional client user agent string.
+            remember_me: If True, use the extended absolute timeout.
+
+        Returns:
+            Tuple of (DeviceSession, RefreshTokenPair). The plaintext
+            refresh token is returned once and must be stored securely
+            by the caller.
+        """
         now = datetime.now(UTC)
         absolute_days = (
             self.settings.session_remember_me_days
@@ -64,14 +94,21 @@ class SessionService:
         expires_at = now + timedelta(days=absolute_days)
 
         token_pair = self.token_service.generate_refresh_token()
-        session = await self.repo.create(
+
+        # Single transaction: create DeviceSession + create initial RefreshTokenFamily epoch.
+        session = await self.device_session_repo.create(
             user_id=user_id,
             tenant_id=tenant_id,
-            refresh_token_hash=token_pair.hash_val,
+            current_refresh_token_hash=token_pair.hash_val,
             ip_address=ip_address,
             user_agent=user_agent,
             expires_at=expires_at,
             last_active_at=now,
+        )
+
+        await self.refresh_token_family_repo.create_epoch(
+            device_session_id=session.id,
+            token_hash=token_pair.hash_val,
         )
 
         security_event_emitter.emit(
@@ -93,83 +130,160 @@ class SessionService:
         plaintext_refresh_token: str,
         ip_address: str | None = None,
         user_agent: str | None = None,
-    ) -> tuple[Session, RefreshTokenPair]:
+    ) -> tuple[DeviceSession, RefreshTokenPair]:
         """Rotate a refresh token and return the next session epoch.
 
-        The current schema preserves consumed refresh token hashes as revoked
-        session rows. That keeps refresh-token reuse detection possible without
-        introducing a token-history table in PR-1.2. A future migration can split
-        user-visible device sessions from refresh-token epochs.
+        Concurrency control: SELECT FOR UPDATE is used on both the
+        RefreshTokenFamily row and the parent DeviceSession row within
+        a single database transaction.
+
+        Locking rationale:
+        - RefreshTokenFamily lock: Prevents two concurrent refresh requests
+          from both marking the same token epoch as unconsumed (TM-015).
+          The first request to acquire the lock succeeds; the second finds
+          the epoch already consumed and raises RefreshTokenReusedError.
+        - DeviceSession lock: Prevents concurrent refresh requests from
+          both revoking and replacing the same session (TM-015).
+
+        Both locks are released when the transaction commits or rolls back.
+
+        Args:
+            plaintext_refresh_token: The opaque refresh token presented
+                by the client.
+            ip_address: Optional client IP address.
+            user_agent: Optional client user agent string.
+
+        Returns:
+            Tuple of (DeviceSession, RefreshTokenPair). The existing
+            DeviceSession is updated in-place with a new refresh token;
+            its identity remains stable across refreshes.
+
+        Raises:
+            TokenInvalidError: The refresh token hash does not map to any
+                known RefreshTokenFamily epoch.
+            RefreshTokenReusedError: The token epoch is already consumed,
+                or the parent session has been revoked.
+            SessionExpiredError: The session has exceeded its absolute or
+                idle timeout.
         """
         now = datetime.now(UTC)
         hash_val = self.token_service.hash_refresh_token(plaintext_refresh_token)
 
-        old_session = await self.repo.get_by_refresh_token_hash(hash_val)
-        if old_session is None:
+        # Lock the RefreshTokenFamily row first.
+        # Why: Prevents concurrent refresh race conditions (TM-015).
+        # Lock released: At transaction commit/rollback.
+        family = await self.refresh_token_family_repo.get_by_token_hash(hash_val, for_update=True)
+        if family is None:
             raise TokenInvalidError("Invalid refresh token.")
 
-        if old_session.revoked_at is not None:
-            await self.repo.revoke_all_for_user(old_session.user_id, revoked_at=now)
+        # If the family epoch is already consumed, this token has been
+        # rotated or replayed. Fail fast without triggering session-wide
+        # revocation (idempotency rule: Section 10.1).
+        if family.consumed_at is not None:
             security_event_emitter.emit(
                 SecurityEvent(
                     event_type=SecurityEventType.SESSION_REUSE_DETECTED,
                     outcome=SecurityOutcome.FAILURE,
-                    user_id=old_session.user_id,
-                    tenant_id=old_session.tenant_id,
-                    session_id=old_session.id,
+                    session_id=family.device_session_id,
                     ip_address=ip_address,
                     user_agent=user_agent,
-                    reason="Previously revoked refresh token was presented",
+                    reason="Consumed refresh token was presented",
                 )
             )
+            raise RefreshTokenReusedError()
+
+        # Lock the parent DeviceSession row.
+        # Why: Prevents concurrent refresh race conditions (TM-015).
+        # Lock released: At transaction commit/rollback.
+        session = await self.device_session_repo.get_by_refresh_token_hash(
+            hash_val, for_update=True
+        )
+        if session is None:
+            raise TokenInvalidError("Invalid refresh token.")
+
+        if session.revoked_at is not None:
+            security_event_emitter.emit(
+                SecurityEvent(
+                    event_type=SecurityEventType.SESSION_REUSE_DETECTED,
+                    outcome=SecurityOutcome.FAILURE,
+                    user_id=session.user_id,
+                    tenant_id=session.tenant_id,
+                    session_id=session.id,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    reason="Revoked session refresh token was presented",
+                )
+            )
+            await self.device_session_repo.revoke_all_for_user(session.user_id, revoked_at=now)
             security_event_emitter.emit(
                 SecurityEvent(
                     event_type=SecurityEventType.ALL_SESSIONS_REVOKED,
                     outcome=SecurityOutcome.SUCCESS,
-                    user_id=old_session.user_id,
+                    user_id=session.user_id,
+                    tenant_id=session.tenant_id,
                     reason="Compromised refresh token detected",
                 )
             )
             raise RefreshTokenReusedError()
 
-        if old_session.expires_at < now:
-            await self._revoke_and_raise_expired(old_session, "Absolute timeout exceeded")
+        if session.expires_at < now:
+            await self._revoke_and_raise_expired(session, "Absolute timeout exceeded")
 
         idle_limit = now - timedelta(hours=self.settings.session_idle_timeout_hours)
-        if old_session.last_active_at < idle_limit:
-            await self._revoke_and_raise_expired(old_session, "Idle timeout exceeded")
+        if session.last_active_at < idle_limit:
+            await self._revoke_and_raise_expired(session, "Idle timeout exceeded")
 
-        await self.repo.revoke(old_session.id, revoked_at=now)
         new_token_pair = self.token_service.generate_refresh_token()
-        new_session = await self.repo.create(
-            user_id=old_session.user_id,
-            tenant_id=old_session.tenant_id,
-            refresh_token_hash=new_token_pair.hash_val,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            expires_at=old_session.expires_at,
-            last_active_at=now,
+
+        # Atomic transaction: mark old family consumed + update existing DeviceSession
+        # in-place + create new family epoch.
+        # Caller MUST ensure these operations execute within a single
+        # database transaction (Implementation Contract Section 9).
+        await self.refresh_token_family_repo.mark_consumed(family.id, consumed_at=now)
+        session = cast(
+            "DeviceSession",
+            await self.device_session_repo.update(
+                session.id,
+                current_refresh_token_hash=new_token_pair.hash_val,
+                last_active_at=now,
+            ),
+        )
+
+        await self.refresh_token_family_repo.create_epoch(
+            device_session_id=session.id,
+            token_hash=new_token_pair.hash_val,
         )
 
         security_event_emitter.emit(
             SecurityEvent(
                 event_type=SecurityEventType.TOKEN_REFRESHED,
                 outcome=SecurityOutcome.SUCCESS,
-                user_id=new_session.user_id,
-                tenant_id=new_session.tenant_id,
-                session_id=new_session.id,
+                user_id=session.user_id,
+                tenant_id=session.tenant_id,
+                session_id=session.id,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                metadata={"previous_session_id": str(old_session.id)},
+                metadata={"previous_session_id": str(session.id)},
             )
         )
 
-        return new_session, new_token_pair
+        return session, new_token_pair
 
-    async def _revoke_and_raise_expired(self, session: Session, reason: str) -> None:
-        """Revoke an expired session and raise a domain error."""
+    async def _revoke_and_raise_expired(self, session: DeviceSession, reason: str) -> None:
+        """Revoke an expired session and raise a domain error.
+
+        This is a private helper. It emits SESSION_EXPIRED and revokes
+        the session atomically within the caller's transaction scope.
+
+        Args:
+            session: The expired DeviceSession.
+            reason: Human-readable explanation for the audit log.
+
+        Raises:
+            SessionExpiredError: Always raised after revocation.
+        """
         now = datetime.now(UTC)
-        await self.repo.revoke(session.id, revoked_at=now)
+        await self.device_session_repo.revoke(session.id, revoked_at=now)
         security_event_emitter.emit(
             SecurityEvent(
                 event_type=SecurityEventType.SESSION_EXPIRED,

@@ -55,3 +55,13 @@
 **Impact**: AI agents are explicitly forbidden from redesigning architecture.
 **Related ADR**: N/A
 **Current Status**: Active
+
+
+---
+
+### Date: 2026-08-08
+**Decision**: Architecture Reconciliation — Stable DeviceSession with rotating RefreshTokenFamily epochs.
+**Reason**: The Implementation Contract Section 8.3 prescribed revoking and recreating DeviceSession on every refresh, which contradicted the EDD objective of decoupling session identity from token rotation. The contract was corrected to update DeviceSession in-place (current_refresh_token_hash, last_active_at) while rotating RefreshTokenFamily epochs. This resolves the original technical debt where session rows represented refresh epochs.
+**Impact**: SessionService.refresh_session() now preserves DeviceSession identity across refreshes. Middleware, audit trails, and future provider integrations can rely on stable session IDs.
+**Related ADR**: ADR-009
+**Current Status**: Active

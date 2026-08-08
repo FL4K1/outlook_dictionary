@@ -46,7 +46,7 @@ All notable changes to this project will be documented in this file.
 
 ### Known Limitations
 
-- Session rows currently double as refresh-token epochs to preserve replay detection with the existing schema.
+- Session identity is now decoupled from refresh-token rotation in PR-1.2.3. Legacy `Session` rows are retained during transition.
 - HS256 remains the only supported algorithm in this alpha slice.
 - Mypy validation is blocked locally by Windows Application Control and must pass in a trusted environment before final merge approval.
 

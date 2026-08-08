@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from app.auth.sessions import SessionService
     from app.auth.tokens import TokenService
-    from mip_models.auth import Session
+    from mip_models.auth import DeviceSession
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,7 +139,7 @@ class AuthenticationService:
         user_id: uuid.UUID,
         tenant_id: uuid.UUID,
         organization_id: uuid.UUID,
-        session: Session,
+        session: DeviceSession,
     ) -> str:
         return self.token_service.create_access_token(
             AccessTokenSubject(

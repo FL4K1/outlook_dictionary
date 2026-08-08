@@ -10,7 +10,7 @@ import pytest
 from app.auth.service import AuthenticationService
 from app.auth.sessions import SessionService
 from app.auth.tokens import RefreshTokenPair, TokenService
-from mip_models.auth import Session
+from mip_models.auth import DeviceSession
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ class TestAuthenticationService:
         tenant_id = uuid.uuid4()
         org_id = uuid.uuid4()
         session_id = uuid.uuid4()
-        session = Session(id=session_id, user_id=user_id, tenant_id=tenant_id)
+        session = DeviceSession(id=session_id, user_id=user_id, tenant_id=tenant_id)
         refresh = RefreshTokenPair(plaintext="refresh", hash_val="hash")
         mock_session_service.create_session.return_value = (session, refresh)
 
@@ -96,7 +96,7 @@ class TestAuthenticationService:
         tenant_id = uuid.uuid4()
         org_id = uuid.uuid4()
         session_id = uuid.uuid4()
-        session = Session(id=session_id, user_id=user_id, tenant_id=tenant_id)
+        session = DeviceSession(id=session_id, user_id=user_id, tenant_id=tenant_id)
         refresh = RefreshTokenPair(plaintext="new-refresh", hash_val="new-hash")
         mock_session_service.refresh_session.return_value = (session, refresh)
 
