@@ -10,13 +10,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mip_models.auth import Role, Session
+    from mip_models.auth import DeviceSession, Role, Session
     from mip_models.tenant import Tenant
 
 
-
-import uuid
-from datetime import datetime
+import uuid  # noqa: TC003
+from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -78,10 +77,17 @@ class User(Base, IdentityMixin, TimestampMixin, SoftDeleteMixin):
         "Membership",
         back_populates="user",
         cascade="all, delete-orphan",
+        foreign_keys="[Membership.user_id]",
     )
 
     sessions: Mapped[list[Session]] = relationship(
         "Session",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    device_sessions: Mapped[list[DeviceSession]] = relationship(
+        "DeviceSession",
         back_populates="user",
         cascade="all, delete-orphan",
     )

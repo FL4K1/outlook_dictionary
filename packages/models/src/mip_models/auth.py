@@ -14,11 +14,10 @@ if TYPE_CHECKING:
     from mip_models.user import Membership, User
 
 
+import uuid  # noqa: TC003
+from datetime import datetime  # noqa: TC003
 
-import uuid
-from datetime import datetime
-
-from sqlalchemy import Boolean, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, INET, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -201,6 +200,103 @@ class Session(Base, IdentityMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<Session(id={self.id}, user={self.user_id})>"
+
+
+class DeviceSession(Base, IdentityMixin, TimestampMixin):
+    """A stable, user-visible authentication session tied to a specific device."""
+
+    __tablename__ = "device_sessions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    current_refresh_token_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="SHA-256 hash of the current refresh token",
+    )
+
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
+    )
+
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    user: Mapped[User] = relationship(
+        "User",
+        back_populates="device_sessions",
+    )
+
+    refresh_token_families: Mapped[list[RefreshTokenFamily]] = relationship(
+        back_populates="device_session",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def __repr__(self) -> str:
+        return f"<DeviceSession(id={self.id}, user={self.user_id})>"
+
+
+class RefreshTokenFamily(Base, IdentityMixin, TimestampMixin):
+    """A single refresh-token epoch within a device session family."""
+
+    __tablename__ = "refresh_token_families"
+
+    device_session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("device_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    token_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="SHA-256 hash of the refresh token",
+    )
+
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When this refresh token was rotated/consumed",
+    )
+
+    device_session: Mapped[DeviceSession] = relationship(
+        back_populates="refresh_token_families",
+    )
+
+    def __repr__(self) -> str:
+        return f"<RefreshTokenFamily(id={self.id}, device_session={self.device_session_id})>"
 
 
 class ServiceAccount(Base, IdentityMixin, TimestampMixin):
