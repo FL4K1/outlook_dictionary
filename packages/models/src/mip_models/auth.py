@@ -7,15 +7,13 @@ Sessions define user login states.
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003
+from datetime import datetime  # noqa: TC003
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mip_models.tenant import Tenant
     from mip_models.user import Membership, User
-
-
-import uuid  # noqa: TC003
-from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, INET, UUID

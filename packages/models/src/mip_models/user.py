@@ -7,15 +7,13 @@ Memberships join Users to Tenants with a Role assignment.
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003
+from datetime import datetime  # noqa: TC003
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mip_models.auth import DeviceSession, Role, Session
     from mip_models.tenant import Tenant
-
-
-import uuid  # noqa: TC003
-from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
