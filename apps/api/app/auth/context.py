@@ -53,4 +53,16 @@ class AuthenticationContext:
         return set(codenames) <= self.permissions
 
 
+def _immutable_setattr(self: AuthenticationContext, name: str, value: object) -> None:
+    raise AttributeError(f"cannot assign to field {name!r}")
+
+
+def _immutable_delattr(self: AuthenticationContext, name: str) -> None:
+    raise AttributeError(f"cannot delete field {name!r}")
+
+
+AuthenticationContext.__setattr__ = _immutable_setattr  # type: ignore[assignment]
+AuthenticationContext.__delattr__ = _immutable_delattr  # type: ignore[assignment]
+
+
 ANONYMOUS_CONTEXT: AuthenticationContext | None = None
