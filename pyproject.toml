@@ -51,6 +51,12 @@ source = [
 ]
 omit = ["*/tests/*", "*/__pycache__/*"]
 
+[tool.ruff]
+# Exclude documentation from linting and formatting — docs/ contains Markdown
+# files that are not Python source. Ruff ≥0.16.0 formats Python code blocks
+# inside .md files; excluding docs/ prevents that behavior monorepo-wide.
+extend-exclude = ["docs"]
+
 [tool.coverage.report]
 fail_under = 85
 show_missing = true
