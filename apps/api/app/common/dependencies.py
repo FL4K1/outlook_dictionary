@@ -75,3 +75,13 @@ def get_current_settings() -> Settings:
     injectable and overridable in tests.
     """
     return get_settings()
+
+
+def get_session_factory() -> AsyncSessionFactory | None:
+    """Return the application-scoped session factory.
+
+    Used by middleware and other application-scoped components that
+    need to create per-request database sessions outside of FastAPI's
+    dependency injection system.
+    """
+    return _session_factory

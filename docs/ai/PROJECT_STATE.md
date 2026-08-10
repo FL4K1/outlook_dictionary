@@ -9,9 +9,9 @@
 | Field | Value |
 | :--- | :--- |
 | **Current Version** | v0.3.0-alpha.2 |
-| **Current Branch** | main (pending release tag) |
-| **Current Release** | v0.3.0-alpha.2 — Session Infrastructure |
-| **Current Sprint** | Session Infrastructure (PR-1.2.3) |
+| **Current Branch** | feature/pr-1.2.4-middleware-authorization |
+| **Current Release** | v0.3.0-alpha.2 — Session Infrastructure (PR-1.2.3) |
+| **Current Sprint** | Middleware & Authorization (PR-1.2.4) — Complete, Conditional Merge Readiness |
 | **Current Milestone** | PR-1.2 Authentication |
 
 ---
@@ -24,17 +24,18 @@
 - **Authentication Foundation**: AuthenticationContext, SecurityEvent, AuthenticationService
 - **Token Infrastructure**: TokenService, SigningProvider, JWT claim enforcement
 - **Session Infrastructure**: Stable DeviceSession model, RefreshTokenFamily epochs, atomic refresh with locking, timeout enforcement, revocation, security event emission
+- **Middleware & Authorization**: AuthenticationMiddleware, fail-closed factory=None, JWT sid/tid/oid enforcement, DeviceSession validation, tenant/org isolation, membership validation, immutable AuthenticationContext, PolicyEngine with default-deny, authorization dependencies, public route allow-list, authorization security events
 
 ### What is In Progress
 - None
 
 ### What is Blocked
-- MyPy cannot execute locally due to Windows Application Control. (Must pass in CI).
-- PostgreSQL-backed integration tests deferred (requires live DB environment — not available locally).
+- **SR-053–SR-060 Verification**: Approved PR-1.2.4 EDD covers SR-025 through SR-052. Requirements SR-053 through SR-060 cannot be verified because their authoritative source text is unavailable. This prevents a full EDD compliance claim but does not block the verified implementation.
+- **MyPy**: Local execution blocked by Windows Application Control. (Must pass in CI).
+- **PostgreSQL-backed integration tests**: Deferred (requires live DB environment — not available locally).
 
 ### What Comes Next
-- **Middleware & Authorization**: Depends on Session Infrastructure
-- **Authentication APIs**: Depends on Middleware
+- **Authentication APIs (PR-1.2.5)**: Depends on Middleware & Authorization
 - **Provider Integration**: Microsoft Entra ID — depends on Auth APIs
 
 ---
@@ -44,7 +45,7 @@
 | Field | Value |
 | :--- | :--- |
 | **Next Milestone** | v0.3.0-alpha.3 — Middleware & Authorization |
-| **Next Branch** | `feature/pr-1.2.4-middleware-authorization` |
-| **Next Threat Model** | Middleware & Authorization security requirements (PR-1.2.4) |
-| **Next EDD** | `docs/reviews/PR-1.2.4-middleware-authorization-edd.md` (pending) |
-| **Last Updated** | 2026-08-08 |
+| **Next Branch** | `feature/pr-1.2.4-middleware-authorization` (pending merge) |
+| **Next Threat Model** | PR-1.2.4 Middleware & Authorization security requirements (complete) |
+| **Next EDD** | `docs/reviews/PR-1.2.4-middleware-authorization-edd.md` (present; SR-025–SR-052 verified) |
+| **Last Updated** | 2026-08-09 |

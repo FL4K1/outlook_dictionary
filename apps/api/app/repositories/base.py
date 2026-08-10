@@ -6,14 +6,17 @@ All specific repositories should inherit from BaseRepository.
 
 from __future__ import annotations
 
-import uuid
-from collections.abc import Sequence
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from sqlalchemy import delete, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from mip_models.base import Base
+
+if TYPE_CHECKING:
+    import uuid
+    from collections.abc import Sequence
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 ModelType = TypeVar("ModelType", bound=Base)
 

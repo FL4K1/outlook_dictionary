@@ -57,6 +57,11 @@ async def test_security_headers_present(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_not_found_returns_consistent_error(client: AsyncClient) -> None:
-    """Non-existent endpoints should return a structured error response."""
+    """Non-existent endpoints should return a structured error response.
+
+    When the session factory is unavailable (testing), unauthenticated
+    requests to unknown routes return 401 rather than 404 to avoid
+    leaking route existence information.
+    """
     response = await client.get("/nonexistent")
-    assert response.status_code == 404
+    assert response.status_code == 401

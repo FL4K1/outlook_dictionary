@@ -31,6 +31,7 @@ class AuthenticationContext:
     session_id: uuid.UUID
     membership_id: uuid.UUID | None = None
     role_ids: frozenset[uuid.UUID] = field(default_factory=frozenset)
+    role_names: frozenset[str] = field(default_factory=frozenset)
     permissions: frozenset[str] = field(default_factory=frozenset)
     authentication_method: str = "session"
     provider: str | None = None
