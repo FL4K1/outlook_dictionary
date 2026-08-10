@@ -69,7 +69,9 @@ ROLE_PERMISSIONS = {
 
 async def seed_permissions(session: AsyncSession) -> dict[str, uuid.UUID]:
     """Seed permissions and return mapping of codename -> ID."""
-    print("Seeding permissions...")
+    import sys
+
+    sys.stdout.write("Seeding permissions...\n")
     perm_map = {}
     for perm_data in SYSTEM_PERMISSIONS:
         result = await session.execute(
@@ -88,7 +90,9 @@ async def seed_permissions(session: AsyncSession) -> dict[str, uuid.UUID]:
 
 async def seed_roles(session: AsyncSession, perm_map: dict[str, uuid.UUID]) -> None:
     """Seed system roles and map permissions to them."""
-    print("Seeding roles...")
+    import sys
+
+    sys.stdout.write("Seeding roles...\n")
     for role_name in SystemRole:
         # Create role if missing
         result = await session.execute(
@@ -119,7 +123,9 @@ async def seed_roles(session: AsyncSession, perm_map: dict[str, uuid.UUID]) -> N
                 session.add(rp)
 
     await session.commit()
-    print("Seed complete.")
+    import sys
+
+    sys.stdout.write("Seed complete.\n")
 
 
 async def run_seed() -> None:
@@ -134,7 +140,9 @@ async def run_seed() -> None:
         perm_map = await seed_permissions(session)
         await seed_roles(session, perm_map)
     except Exception as e:
-        print(f"Error seeding: {e}")
+        import sys
+
+        sys.stdout.write(f"Error seeding: {e}\n")
         raise
     finally:
         await engine.dispose()

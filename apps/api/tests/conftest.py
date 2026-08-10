@@ -46,3 +46,14 @@ async def client(test_settings: Settings) -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture
+async def db_session() -> AsyncGenerator[None, None]:
+    """Provide a database session for testing.
+
+    Currently deferred until PostgreSQL testcontainers are configured
+    in Milestone 1 (consistent with PR-1.2.3 integration testing strategy).
+    """
+    pytest.skip("Requires PostgreSQL testcontainers (deferred per PR-1.2.3)")
+    yield

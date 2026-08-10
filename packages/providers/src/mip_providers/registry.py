@@ -100,8 +100,6 @@ class ProviderRegistry:
     def registered_types(self) -> list[str]:
         """Return all provider types that have at least one registered implementation."""
         all_types = (
-            set(self._sync_providers)
-            | set(self._auth_providers)
-            | set(self._webhook_providers)
+            set(self._sync_providers) | set(self._auth_providers) | set(self._webhook_providers)
         )
         return sorted(all_types)

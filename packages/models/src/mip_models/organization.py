@@ -13,8 +13,7 @@ if TYPE_CHECKING:
     from mip_models.tenant import Tenant
 
 
-
-from datetime import datetime
+from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import JSONB

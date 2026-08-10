@@ -14,7 +14,7 @@ from app.auth.exceptions import AuthenticationError, TokenInvalidError
 from app.auth.middleware import AuthenticationMiddleware
 from app.auth.policy import PolicyEngine
 from app.auth.tokens import TokenService
-from app.common.config import Environment, Settings
+from app.common.config import Environment, LogFormat, Settings
 
 
 def _make_settings() -> Settings:
@@ -22,7 +22,7 @@ def _make_settings() -> Settings:
         app_env=Environment.TESTING,
         app_debug=False,
         app_log_level="WARNING",
-        app_log_format="console",
+        app_log_format=LogFormat.CONSOLE,
         postgres_host="localhost",
         postgres_port=5432,
         postgres_user="test",

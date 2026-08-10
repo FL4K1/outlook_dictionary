@@ -9,7 +9,7 @@ All models use IdentityMixin (UUID PK) and TimestampMixin (created/updated).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime  # noqa: TC003
 from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, func
