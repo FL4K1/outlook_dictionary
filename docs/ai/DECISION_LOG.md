@@ -74,3 +74,12 @@
 **Impact**: PR-1.2.4 is conditionally ready for merge. Full EDD compliance cannot be claimed until SR-053–SR-060 source text is obtained and verified. Documentation synchronization (CURRENT_SPRINT, PROJECT_STATE, CHANGELOG, DECISION_LOG, TECHNICAL_DEBT) is the remaining closeout work.
 **Related ADR**: N/A
 **Current Status**: Active — Conditional Merge Readiness
+
+---
+
+### Date: 2026-08-11
+**Decision**: Merge PR-1.2.4 into main and release v0.3.0-alpha.3.
+**Reason**: PR-1.2.4 implementation is complete and conditionally ready. SR-025–SR-052 are implemented and verified against the approved EDD. The critical fail-open bypass has been remediated. CI validation passed (Lint, Type Check, Tests, Docker Build, Security Scan). The merge closes the authentication enforcement gap and unblocks PR-1.2.5.
+**Impact**: Main branch now contains request-time authentication and authorization enforcement. PR-1.2.5 must be created from updated main and requires its own approved EDD before implementation begins.
+**Related ADR**: N/A
+**Current Status**: Completed

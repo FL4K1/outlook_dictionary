@@ -5,7 +5,7 @@
 ---
 
 ## Sprint: Middleware & Authorization (PR-1.2.4)
-**Status**: Complete — Conditional Merge Readiness.
+**Status**: Merged — Released as v0.3.0-alpha.3.
 
 ---
 
@@ -53,16 +53,44 @@ Close the authentication enforcement gap by introducing request-time JWT validat
 - Test coverage gaps — 11 security-critical paths lack dedicated integration tests (mocked control flow verified).
 
 ## Current Blockers
-- **SR-053–SR-060 Source Text**: The approved PR-1.2.4 EDD is present and covers SR-025 through SR-052. Requirements SR-053 through SR-060 cannot be verified because their source text is unavailable. This does not block the verified portion of the implementation but prevents full EDD compliance claims.
+- **SR-053–SR-060 Source Text**: The approved PR-1.2.4 EDD is present and covers SR-025 through SR-052. Requirements SR-053 through SR-060 cannot be verified because their authoritative source text is unavailable. This does not block the verified portion of the implementation but prevents full EDD compliance claims.
 - **MyPy**: Local execution blocked by Windows Application Control.
 - **PostgreSQL Integration Tests**: Deferred per project convention (requires live DB environment).
 
 ---
 
+## Post-Merge State
+PR-1.2.4 has been merged into main and released as v0.3.0-alpha.3.
+
+## Next Sprint
+**Sprint: Authentication APIs (PR-1.2.5)**
+**Status**: Blocked — Awaiting approved EDD.
+
+### Objectives
+Implement user-facing authentication API endpoints (`/auth/*`) for login, token refresh, and logout.
+
+### Prerequisites
+- [ ] **PR-1.2.5 EDD**: The approved Engineering Design Document for Authentication APIs must be located and verified before implementation begins.
+- [ ] **Updated main**: PR-1.2.4 must be merged and released (complete).
+
+### Scope
+- `POST /auth/token` — OAuth2 token endpoint (login with username/password or provider callback).
+- `POST /auth/refresh` — Refresh token rotation and revocation.
+- `POST /auth/logout` — Session revocation and cleanup.
+- `POST /auth/logout-all` — Revoke all sessions for a user.
+- `GET /auth/sessions` — List active sessions (future).
+- Security event emission for all authentication outcomes.
+- Rate limiting and brute-force protection (future).
+
+### Out of Scope
+- Microsoft Entra ID OAuth flow (PR-1.3).
+- MFA / TOTP.
+- Frontend authentication UI.
+- Service-to-service authentication.
+
 ## Required Documents Before Implementation
-- [x] **Threat Model Requirements**: PR-1.2.4 Security Threat Model (approved).
-- [x] **Required EDD**: Engineering Design Document (`docs/reviews/PR-1.2.4-middleware-authorization-edd.md`). Covers SR-025 through SR-052.
-- [x] **Required Implementation Contract**: Approved boundaries and interfaces.
+- [ ] **PR-1.2.5 EDD**: Engineering Design Document for Authentication APIs.
+- [ ] **Threat Model**: PR-1.2.5 Security Threat Model (approved).
 
 ## Deliverables
 - [x] `AuthenticationMiddleware` — JWT verification, session validation, context injection.

@@ -13,28 +13,27 @@
 
 ## Current Release
 
-### v0.3.0-alpha.1 — Authentication Foundation & Token Infrastructure
-*(Currently on `main`, pending release tag)*
-- AuthenticationContext, SecurityEvent, AuthenticationService.
-- TokenService, SigningProvider (HS256), JWT claim enforcement.
-- SessionService, refresh-token rotation, reuse detection.
+### v0.3.0-alpha.3 — Middleware & Authorization
+*(Released 2026-08-11)*
+- AuthenticationMiddleware — JWT verification, DeviceSession validation, context injection.
+- Fail-closed middleware behavior — when the session factory is unavailable, protected routes return `401 Unauthorized`.
+- PolicyEngine — default-deny authorization.
+- Authorization dependencies — `require_permission()`, `require_role()`, `require_tenant_membership()`.
+- Public route allow-list — explicit frozenset of exempt routes.
+- Security events — authentication and authorization outcome emission.
 
 ---
 
 ## Current Milestone (PR-1.2 Authentication)
 
 ### Current Sprint
-**v0.3.0-alpha.2 — Session Infrastructure (Next)**
-- Stable device-session model.
-- Session lifecycle, versioning, revocation.
-- Idle/absolute timeouts, multi-device support.
+**v0.3.0-alpha.4 — Authentication APIs (PR-1.2.5)**
+*Blocked — awaiting approved EDD*
+- `/auth/*` endpoints (login, refresh, logout).
 
 ### Future Sprints in Current Milestone
-**v0.3.0-alpha.3 — Authentication Middleware & Authorization**
-- Middleware, PolicyEngine, Context injection.
-
-**v0.3.0-alpha.4 — Authentication APIs**
-- `/auth/*` endpoints (login, refresh, logout).
+**v0.3.0-alpha.5 — Provider Integration (PR-1.3)**
+- Microsoft Entra ID OAuth 2.0 / OIDC, identity linking, provider credentials.
 
 ---
 
