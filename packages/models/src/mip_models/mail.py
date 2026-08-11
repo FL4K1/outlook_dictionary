@@ -12,9 +12,8 @@ if TYPE_CHECKING:
     from mip_models.tenant import Tenant
 
 
-
-import uuid
-from datetime import datetime
+import uuid  # noqa: TC003
+from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, BYTEA, JSONB, UUID

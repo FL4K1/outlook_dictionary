@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
 from mip_models.auth import Role
 from mip_models.organization import Organization
 from mip_models.tenant import Tenant
-from mip_models.user import User
+from mip_models.user import Membership, User
+
+if TYPE_CHECKING:
+    import uuid
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class OrganizationRepository(BaseRepository[Organization]):
@@ -61,5 +65,27 @@ class RoleRepository(BaseRepository[Role]):
     async def get_system_role(self, name: str) -> Role | None:
         result = await self.session.execute(
             select(Role).where(Role.name == name, Role.is_system == True)  # noqa: E712
+        )
+        return result.scalars().first()
+
+
+class MembershipRepository(BaseRepository[Membership]):
+    """Repository for Membership entities."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(Membership, session)
+
+    async def get_by_user_and_tenant(
+        self,
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+    ) -> Membership | None:
+        """Find an active membership for a user in a tenant."""
+        result = await self.session.execute(
+            select(Membership).where(
+                Membership.user_id == user_id,
+                Membership.tenant_id == tenant_id,
+                Membership.is_active == True,  # noqa: E712
+            )
         )
         return result.scalars().first()

@@ -5,8 +5,8 @@ Records all security and access events. Append-only.
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime
+import uuid  # noqa: TC003
+from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import String, Text
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID

@@ -65,3 +65,12 @@
 **Impact**: SessionService.refresh_session() now preserves DeviceSession identity across refreshes. Middleware, audit trails, and future provider integrations can rely on stable session IDs.
 **Related ADR**: ADR-009
 **Current Status**: Active
+
+---
+
+### Date: 2026-08-09
+**Decision**: PR-1.2.4 closeout — conditional merge readiness with documented SR-053–SR-060 gap.
+**Reason**: During PR-1.2.4 implementation, a critical fail-open authentication bypass was identified when the session factory is unavailable (`factory is None` returned `call_next(request)`). This was remediated to fail-closed behavior returning `401 Unauthorized`. The approved EDD (`docs/reviews/PR-1.2.4-middleware-authorization-edd.md`) is present and covers SR-025 through SR-052, which have been implemented and verified. Requirements SR-053 through SR-060 cannot be verified because their authoritative source text is unavailable in the current EDD. No compliance claim is made for SR-053–SR-060. PR-1.2.5 is not started and must not be considered in progress.
+**Impact**: PR-1.2.4 is conditionally ready for merge. Full EDD compliance cannot be claimed until SR-053–SR-060 source text is obtained and verified. Documentation synchronization (CURRENT_SPRINT, PROJECT_STATE, CHANGELOG, DECISION_LOG, TECHNICAL_DEBT) is the remaining closeout work.
+**Related ADR**: N/A
+**Current Status**: Active — Conditional Merge Readiness

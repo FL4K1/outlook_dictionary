@@ -100,7 +100,7 @@ class HmacSigningProvider:
             audience=self._audience,
             leeway=self._leeway,
             options={
-                "require": ["exp", "iat", "nbf", "iss", "aud", "sub", "jti"],
+                "require": ["exp", "iat", "nbf", "iss", "aud", "sub", "jti", "sid", "tid", "oid"],
                 "verify_signature": True,
                 "verify_exp": True,
                 "verify_iat": True,

@@ -19,8 +19,7 @@ if TYPE_CHECKING:
     from mip_models.user import Membership
 
 
-
-import uuid
+import uuid  # noqa: TC003
 
 from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID

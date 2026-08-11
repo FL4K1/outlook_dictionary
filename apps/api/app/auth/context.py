@@ -31,6 +31,7 @@ class AuthenticationContext:
     session_id: uuid.UUID
     membership_id: uuid.UUID | None = None
     role_ids: frozenset[uuid.UUID] = field(default_factory=frozenset)
+    role_names: frozenset[str] = field(default_factory=frozenset)
     permissions: frozenset[str] = field(default_factory=frozenset)
     authentication_method: str = "session"
     provider: str | None = None
@@ -50,6 +51,18 @@ class AuthenticationContext:
     def has_all_permissions(self, *codenames: str) -> bool:
         """Check if the authenticated principal has all of the given permissions."""
         return set(codenames) <= self.permissions
+
+
+def _immutable_setattr(self: AuthenticationContext, name: str, value: object) -> None:
+    raise AttributeError(f"cannot assign to field {name!r}")
+
+
+def _immutable_delattr(self: AuthenticationContext, name: str) -> None:
+    raise AttributeError(f"cannot delete field {name!r}")
+
+
+AuthenticationContext.__setattr__ = _immutable_setattr  # type: ignore[assignment]
+AuthenticationContext.__delattr__ = _immutable_delattr  # type: ignore[assignment]
 
 
 ANONYMOUS_CONTEXT: AuthenticationContext | None = None

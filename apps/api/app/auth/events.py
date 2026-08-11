@@ -54,6 +54,7 @@ class SecurityEventType(StrEnum):
     CALLBACK_FAILED = "callback_failed"
 
     # --- Token ---
+    TOKEN_VALIDATED = "token_validated"  # noqa: S105
     TOKEN_ISSUED = "token_issued"  # noqa: S105
     TOKEN_REFRESHED = "token_refreshed"  # noqa: S105
     TOKEN_REFRESH_FAILED = "token_refresh_failed"  # noqa: S105
@@ -69,6 +70,8 @@ class SecurityEventType(StrEnum):
 
     # --- Authorization ---
     PERMISSION_DENIED = "permission_denied"
+    AUTHORIZATION_SUCCESS = "authorization_success"
+    AUTHORIZATION_FAILURE = "authorization_failure"
     ROLE_ESCALATION_BLOCKED = "role_escalation_blocked"
 
     # --- Account ---

@@ -14,7 +14,10 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.common.config import Settings, get_settings
+from app.auth.middleware import AuthenticationMiddleware
+from app.auth.policy import PolicyEngine
+from app.auth.tokens import TokenService
+from app.common.config import Environment, Settings, get_settings
 from app.common.dependencies import init_dependencies, shutdown_dependencies
 from app.common.exceptions import register_exception_handlers
 from app.common.logging import get_logger, setup_logging
@@ -45,8 +48,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         debug=settings.app_debug,
     )
 
-    # Initialize application-scoped dependencies
-    init_dependencies(settings)
+    if settings.app_env != Environment.TESTING:
+        init_dependencies(settings)
 
     logger.info("application_started")
 
@@ -92,6 +95,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(
+        AuthenticationMiddleware,  # type: ignore[arg-type]
+        policy_engine=PolicyEngine(),
+        token_service=TokenService(settings),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
