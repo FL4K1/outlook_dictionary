@@ -67,6 +67,7 @@ class SessionService:
         ip_address: str | None = None,
         user_agent: str | None = None,
         remember_me: bool = False,
+        request_id: str | None = None,
     ) -> tuple[DeviceSession, RefreshTokenPair]:
         """Create a new device session and issue a refresh token.
 
@@ -120,6 +121,7 @@ class SessionService:
                 session_id=session.id,
                 ip_address=ip_address,
                 user_agent=user_agent,
+                request_id=request_id,
             )
         )
 
@@ -130,6 +132,7 @@ class SessionService:
         plaintext_refresh_token: str,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        request_id: str | None = None,
     ) -> tuple[DeviceSession, RefreshTokenPair]:
         """Rotate a refresh token and return the next session epoch.
 
@@ -174,6 +177,16 @@ class SessionService:
         # Lock released: At transaction commit/rollback.
         family = await self.refresh_token_family_repo.get_by_token_hash(hash_val, for_update=True)
         if family is None:
+            security_event_emitter.emit(
+                SecurityEvent(
+                    event_type=SecurityEventType.TOKEN_REFRESH_FAILED,
+                    outcome=SecurityOutcome.FAILURE,
+                    reason="Invalid refresh token.",
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    request_id=request_id,
+                )
+            )
             raise TokenInvalidError("Invalid refresh token.")
 
         # If the family epoch is already consumed, this token has been
@@ -188,6 +201,7 @@ class SessionService:
                     ip_address=ip_address,
                     user_agent=user_agent,
                     reason="Consumed refresh token was presented",
+                    request_id=request_id,
                 )
             )
             raise RefreshTokenReusedError()
@@ -212,6 +226,7 @@ class SessionService:
                     ip_address=ip_address,
                     user_agent=user_agent,
                     reason="Revoked session refresh token was presented",
+                    request_id=request_id,
                 )
             )
             await self.device_session_repo.revoke_all_for_user(session.user_id, revoked_at=now)
@@ -222,16 +237,21 @@ class SessionService:
                     user_id=session.user_id,
                     tenant_id=session.tenant_id,
                     reason="Compromised refresh token detected",
+                    request_id=request_id,
                 )
             )
             raise RefreshTokenReusedError()
 
         if session.expires_at < now:
-            await self._revoke_and_raise_expired(session, "Absolute timeout exceeded")
+            await self._revoke_and_raise_expired(
+                session, "Absolute timeout exceeded", request_id=request_id
+            )
 
         idle_limit = now - timedelta(hours=self.settings.session_idle_timeout_hours)
         if session.last_active_at < idle_limit:
-            await self._revoke_and_raise_expired(session, "Idle timeout exceeded")
+            await self._revoke_and_raise_expired(
+                session, "Idle timeout exceeded", request_id=request_id
+            )
 
         new_token_pair = self.token_service.generate_refresh_token()
 
@@ -264,12 +284,18 @@ class SessionService:
                 ip_address=ip_address,
                 user_agent=user_agent,
                 metadata={"previous_session_id": str(session.id)},
+                request_id=request_id,
             )
         )
 
         return session, new_token_pair
 
-    async def _revoke_and_raise_expired(self, session: DeviceSession, reason: str) -> None:
+    async def _revoke_and_raise_expired(
+        self,
+        session: DeviceSession,
+        reason: str,
+        request_id: str | None = None,
+    ) -> None:
         """Revoke an expired session and raise a domain error.
 
         This is a private helper. It emits SESSION_EXPIRED and revokes
@@ -292,6 +318,7 @@ class SessionService:
                 tenant_id=session.tenant_id,
                 session_id=session.id,
                 reason=reason,
+                request_id=request_id,
             )
         )
         raise SessionExpiredError(reason)

@@ -78,6 +78,7 @@ class TestAuthenticationService:
             ip_address="127.0.0.1",
             user_agent="pytest",
             remember_me=True,
+            request_id=None,
         )
         mock_token_service.create_access_token.assert_called_once()
         subject = mock_token_service.create_access_token.call_args.args[0]
@@ -118,5 +119,6 @@ class TestAuthenticationService:
             plaintext_refresh_token="old-refresh",
             ip_address="10.0.0.1",
             user_agent="pytest",
+            request_id=None,
         )
         mock_token_service.create_access_token.assert_called_once()

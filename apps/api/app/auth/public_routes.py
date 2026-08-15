@@ -15,6 +15,8 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/health/startup"),
         ("POST", "/auth/token"),
         ("POST", "/auth/refresh"),
+        ("POST", "/auth/logout"),
+        ("POST", "/auth/logout-all"),
         ("GET", "/docs"),
         ("GET", "/redoc"),
         ("GET", "/openapi.json"),

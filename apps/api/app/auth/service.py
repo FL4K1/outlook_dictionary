@@ -64,6 +64,7 @@ class AuthenticationService:
         ip_address: str | None = None,
         user_agent: str | None = None,
         remember_me: bool = False,
+        request_id: str | None = None,
     ) -> AuthenticationResult:
         """Create a platform session and issue access/refresh tokens.
 
@@ -76,6 +77,7 @@ class AuthenticationService:
             ip_address=ip_address,
             user_agent=user_agent,
             remember_me=remember_me,
+            request_id=request_id,
         )
         access_token = self._create_access_token(
             user_id=user_id,
@@ -111,12 +113,14 @@ class AuthenticationService:
         organization_id: uuid.UUID,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        request_id: str | None = None,
     ) -> AuthenticationResult:
         """Rotate a refresh token and issue a new access token."""
         session, refresh_token = await self.session_service.refresh_session(
             plaintext_refresh_token=plaintext_refresh_token,
             ip_address=ip_address,
             user_agent=user_agent,
+            request_id=request_id,
         )
         access_token = self._create_access_token(
             user_id=session.user_id,
