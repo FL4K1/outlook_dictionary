@@ -193,6 +193,83 @@ class TestRefreshSession:
         call_kwargs = mock_refresh_token_family_repo.get_by_token_hash.call_args.kwargs
         assert call_kwargs["for_update"] is True
 
+    async def test_refresh_invalid_token_emits_token_refresh_failed(
+        self,
+        session_service: SessionService,
+        mock_refresh_token_family_repo: MagicMock,
+    ) -> None:
+        mock_refresh_token_family_repo.get_by_token_hash.return_value = None
+
+        with patch("app.auth.sessions.security_event_emitter.emit") as emit_mock:
+            with pytest.raises(TokenInvalidError, match="Invalid refresh token"):
+                await session_service.refresh_session(
+                    "bad-token",
+                    ip_address="10.0.0.1",
+                    user_agent="TestAgent",
+                    request_id="req-123",
+                )
+
+            emit_mock.assert_called_once()
+            event = emit_mock.call_args[0][0]
+            assert event.event_type == SecurityEventType.TOKEN_REFRESH_FAILED
+            assert event.outcome == SecurityOutcome.FAILURE
+            assert event.reason == "Invalid refresh token."
+            assert event.ip_address == "10.0.0.1"
+            assert event.user_agent == "TestAgent"
+            assert event.request_id == "req-123"
+            assert event.user_id is None
+            assert event.tenant_id is None
+            assert event.session_id is None
+            assert event.metadata == {}
+            log_dict = event.to_log_dict()
+            assert "token" not in log_dict
+            assert "refresh_token" not in log_dict
+            assert "jti" not in log_dict
+            assert "user_id" not in log_dict
+
+    async def test_refresh_successful_event_includes_request_id(
+        self,
+        session_service: SessionService,
+        mock_device_session_repo: MagicMock,
+        mock_refresh_token_family_repo: MagicMock,
+    ) -> None:
+        now = datetime.now(UTC)
+        family = RefreshTokenFamily(
+            id=uuid.uuid4(),
+            device_session_id=uuid.uuid4(),
+            token_hash="fake-hashed-token",
+            consumed_at=None,
+        )
+        mock_refresh_token_family_repo.get_by_token_hash.return_value = family
+
+        valid_session = DeviceSession(
+            id=family.device_session_id,
+            user_id=uuid.uuid4(),
+            tenant_id=uuid.uuid4(),
+            current_refresh_token_hash="fake-hashed-token",
+            revoked_at=None,
+            expires_at=now + timedelta(days=30),
+            last_active_at=now,
+        )
+        mock_device_session_repo.get_by_refresh_token_hash.return_value = valid_session
+        mock_device_session_repo.update.return_value = valid_session
+
+        with patch("app.auth.sessions.security_event_emitter.emit") as emit_mock:
+            await session_service.refresh_session(
+                "valid-token",
+                ip_address="10.0.0.1",
+                user_agent="TestAgent",
+                request_id="req-success",
+            )
+
+            refresh_events = [
+                c
+                for c in emit_mock.call_args_list
+                if c.args[0].event_type == SecurityEventType.TOKEN_REFRESHED
+            ]
+            assert len(refresh_events) == 1
+            assert refresh_events[0].args[0].request_id == "req-success"
+
     async def test_refresh_token_already_consumed(
         self,
         session_service: SessionService,

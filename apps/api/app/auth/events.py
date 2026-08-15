@@ -124,6 +124,7 @@ class SecurityEvent:
     metadata: dict[str, str] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     event_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    request_id: str | None = None
 
     def to_log_dict(self) -> dict[str, object]:
         """Serialize the event to a flat dictionary for structured logging.
@@ -148,6 +149,8 @@ class SecurityEvent:
             data["user_agent"] = self.user_agent
         if self.reason is not None:
             data["reason"] = self.reason
+        if self.request_id is not None:
+            data["request_id"] = self.request_id
         if self.metadata:
             data["metadata"] = self.metadata
         return data
