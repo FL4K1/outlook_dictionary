@@ -94,6 +94,25 @@ class Settings(BaseSettings):
     session_absolute_timeout_days: int = 30
     session_remember_me_days: int = 90
 
+    # --- Microsoft Entra ID ---
+    entra_client_id: str = ""
+    entra_client_secret: str = ""
+    entra_tenant_id: str = ""
+    entra_redirect_uri: str = ""
+    entra_scopes: list[str] = Field(
+        default=["openid", "profile", "email", "offline_access"],
+    )
+    entra_jwks_endpoint: str = ""
+    entra_issuer: str = ""
+    entra_audience: str = ""
+    entra_clock_skew_seconds: int = 60
+
+    # --- Encryption ---
+    encryption_dek: str = Field(
+        default="",
+        description="Hex-encoded 32-byte data encryption key for provider tokens.",
+    )
+
     @model_validator(mode="after")
     def validate_token_settings(self) -> Settings:
         """Validate token configuration fails closed before runtime use."""
@@ -109,6 +128,47 @@ class Settings(BaseSettings):
         if self.is_production and self.jwt_signing_secret == "dev-only-change-me-minimum-32-bytes":  # noqa: S105
             msg = "Production JWT signing secret must not use the development default."
             raise ValueError(msg)
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_entra_settings(self) -> Settings:
+        """Validate Entra ID configuration fails closed before runtime use."""
+        if self.is_production:
+            if not self.entra_client_id:
+                msg = "Production entra_client_id must be configured."
+                raise ValueError(msg)
+            if not self.entra_client_secret:
+                msg = "Production entra_client_secret must be configured."
+                raise ValueError(msg)
+            if not self.entra_tenant_id:
+                msg = "Production entra_tenant_id must be configured."
+                raise ValueError(msg)
+            if not self.entra_redirect_uri:
+                msg = "Production entra_redirect_uri must be configured."
+                raise ValueError(msg)
+            if not self.entra_jwks_endpoint:
+                msg = "Production entra_jwks_endpoint must be configured."
+                raise ValueError(msg)
+            if not self.entra_issuer:
+                msg = "Production entra_issuer must be configured."
+                raise ValueError(msg)
+            if not self.entra_audience:
+                msg = "Production entra_audience must be configured."
+                raise ValueError(msg)
+            if not self.encryption_dek:
+                msg = "Production encryption_dek must be configured."
+                raise ValueError(msg)
+
+        if self.encryption_dek:
+            try:
+                dek_bytes = bytes.fromhex(self.encryption_dek)
+            except ValueError as exc:
+                msg = "encryption_dek must be a hex-encoded string."
+                raise ValueError(msg) from exc
+            if len(dek_bytes) != 32:
+                msg = f"encryption_dek must be 32 bytes (64 hex chars), got {len(dek_bytes)} bytes."
+                raise ValueError(msg)
 
         return self
 

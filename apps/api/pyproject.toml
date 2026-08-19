@@ -17,6 +17,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "prometheus-client>=0.21.0",
     "PyJWT>=2.8.0",
+    "cryptography>=42.0.0",
     "mip-models",
     "mip-providers",
     "mip-ai",
