@@ -20,6 +20,11 @@ from mip_models.auth import (
 )
 from mip_models.base import Base, TenantMixin, TimestampMixin
 from mip_models.database import AsyncSessionFactory, get_async_engine
+from mip_models.identity_provider import (
+    EntraTenantMapping,
+    IdentityProviderCredential,
+    OAuthState,
+)
 from mip_models.mail import MailAccount, ProviderCredential
 from mip_models.organization import Organization
 from mip_models.tenant import Tenant
@@ -31,9 +36,12 @@ __all__ = [
     "AuditLog",
     "Base",
     "DeviceSession",
+    "EntraTenantMapping",
     "Identity",
+    "IdentityProviderCredential",
     "MailAccount",
     "Membership",
+    "OAuthState",
     "Organization",
     "Permission",
     "ProviderCredential",

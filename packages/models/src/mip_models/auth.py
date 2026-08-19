@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mip_models.tenant import Tenant
-    from mip_models.user import Membership, User
+    from mip_models.user import Identity, Membership, User
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, INET, UUID
@@ -227,6 +227,14 @@ class DeviceSession(Base, IdentityMixin, TimestampMixin):
         comment="SHA-256 hash of the current refresh token",
     )
 
+    identity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("identities.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK to identities.id for provider derivation; NULL for platform auth",
+    )
+
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
 
@@ -251,6 +259,11 @@ class DeviceSession(Base, IdentityMixin, TimestampMixin):
     user: Mapped[User] = relationship(
         "User",
         back_populates="device_sessions",
+    )
+
+    identity: Mapped[Identity | None] = relationship(
+        "Identity",
+        foreign_keys=[identity_id],
     )
 
     refresh_token_families: Mapped[list[RefreshTokenFamily]] = relationship(

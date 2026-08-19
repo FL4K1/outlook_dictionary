@@ -82,4 +82,11 @@
 **Reason**: PR-1.2.4 implementation is complete and conditionally ready. SR-025–SR-052 are implemented and verified against the approved EDD. The critical fail-open bypass has been remediated. CI validation passed (Lint, Type Check, Tests, Docker Build, Security Scan). The merge closes the authentication enforcement gap and unblocks PR-1.2.5.
 **Impact**: Main branch now contains request-time authentication and authorization enforcement. PR-1.2.5 must be created from updated main and requires its own approved EDD before implementation begins.
 **Related ADR**: N/A
+**Current Status**: Completed---
+
+### Date: 2026-08-15
+**Decision**: Merge PR-1.2.5 into main and release v0.3.0-alpha.4.
+**Reason**: PR-1.2.5 implementation is complete and verified against the approved EDD (`docs/reviews/PR-1.2.5-authentication-apis-edd.md`). All unit tests pass (69 auth/security tests). Ruff lint and format checks pass. Phase 5 security event verification complete. The merge closes the authentication API gap and unblocks PR-1.3 Provider Integration.
+**Impact**: Main branch now contains the complete authentication lifecycle (refresh, token issuance, logout) with security event emission and request_id propagation. PR-1.3 must be created from updated main and requires its own approved EDD before implementation begins.
+**Related ADR**: N/A
 **Current Status**: Completed

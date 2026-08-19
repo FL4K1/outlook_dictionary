@@ -33,8 +33,7 @@ testpaths = [
     "apps/workers/tests",
     "packages/models/tests",
     "packages/providers/tests",
-    "packages/ai/tests",
-    "packages/email_parser/tests",
+    "tests/unit",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

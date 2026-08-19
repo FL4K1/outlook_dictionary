@@ -8,32 +8,31 @@
 
 - **v0.1.0 — Engineering Foundation**: Monorepo structure, FastAPI, Docker, CI/CD, Ruff, MyPy, Alembic.
 - **v0.2.0 — Identity & Database**: Tenants, Users, Roles, Permissions, Sessions schema, async repositories.
+- **v0.3.0-alpha.4 — Authentication APIs (PR-1.2.5)**: OAuth2-compatible token endpoint, refresh token rotation, session revocation, security event emission, request_id propagation.
 
 ---
 
 ## Current Release
 
-### v0.3.0-alpha.3 — Middleware & Authorization
-*(Released 2026-08-11)*
-- AuthenticationMiddleware — JWT verification, DeviceSession validation, context injection.
-- Fail-closed middleware behavior — when the session factory is unavailable, protected routes return `401 Unauthorized`.
-- PolicyEngine — default-deny authorization.
-- Authorization dependencies — `require_permission()`, `require_role()`, `require_tenant_membership()`.
-- Public route allow-list — explicit frozenset of exempt routes.
-- Security events — authentication and authorization outcome emission.
+### v0.3.0-alpha.4 — Authentication APIs (PR-1.2.5)
+*(Released 2026-08-15)*
+- OAuth2-compatible token endpoint (`POST /auth/token`).
+- Refresh token rotation and revocation (`POST /auth/refresh`).
+- Session revocation (`POST /auth/logout`, `POST /auth/logout-all`).
+- Security event emission for all authentication outcomes.
+- Request ID propagation into security events.
 
 ---
 
 ## Current Milestone (PR-1.2 Authentication)
 
 ### Current Sprint
-**v0.3.0-alpha.4 — Authentication APIs (PR-1.2.5)**
+**v0.3.0-alpha.5 — Provider Integration (PR-1.3)**
 *Blocked — awaiting approved EDD*
-- `/auth/*` endpoints (login, refresh, logout).
+- Microsoft Entra ID OAuth 2.0 / OIDC, identity linking, provider credentials.
 
 ### Future Sprints in Current Milestone
-**v0.3.0-alpha.5 — Provider Integration (PR-1.3)**
-- Microsoft Entra ID OAuth 2.0 / OIDC, identity linking, provider credentials.
+None — PR-1.2 milestone complete with PR-1.2.5 release.
 
 ---
 
