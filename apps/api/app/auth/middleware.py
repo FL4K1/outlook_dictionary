@@ -45,6 +45,7 @@ from app.common.logging import get_logger
 from app.repositories.auth import DeviceSessionRepository
 from app.repositories.core import MembershipRepository, TenantRepository
 from mip_models.auth import Role
+from mip_models.user import Identity
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -314,6 +315,30 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 )
                 raise TenantAccessDeniedError()
 
+            # --- AD-PR13-010: Derive provider from persisted DeviceSession → Identity ---
+            if device_session.identity_id is not None:
+                identity_stmt = select(Identity).where(Identity.id == device_session.identity_id)
+                identity_result = await session.execute(identity_stmt)
+                identity = identity_result.scalars().first()
+                if identity is None:
+                    security_event_emitter.emit(
+                        SecurityEvent(
+                            event_type=SecurityEventType.TOKEN_INVALID,
+                            outcome=SecurityOutcome.FAILURE,
+                            reason="Session identity not found",
+                            user_id=user_id,
+                            tenant_id=tenant_id,
+                            session_id=device_session.id,
+                            ip_address=request.client.host if request.client else None,
+                            user_agent=request.headers.get("User-Agent"),
+                            metadata={"request_id": request_id},
+                        )
+                    )
+                    raise TokenInvalidError("Session identity not found.")
+                provider = identity.provider
+            else:
+                provider = None
+
             stmt = (
                 select(Role)
                 .where(Role.id == membership.role_id)
@@ -351,6 +376,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 role_names=frozenset(role_names),
                 permissions=frozenset(permissions),
                 authentication_method="session",
+                provider=provider,
                 authenticated_at=datetime.now(UTC),
                 request_ip=request.client.host if request.client else None,
                 user_agent=request.headers.get("User-Agent"),

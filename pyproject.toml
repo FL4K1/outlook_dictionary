@@ -56,6 +56,15 @@ omit = ["*/tests/*", "*/__pycache__/*"]
 # inside .md files; excluding docs/ prevents that behavior monorepo-wide.
 extend-exclude = ["docs"]
 
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "python-jose[cryptography]>=3.5.0",
+    "ruff>=0.16.3",
+]
+
 [tool.coverage.report]
 fail_under = 85
 show_missing = true
