@@ -25,6 +25,7 @@ from app.repositories.auth import DeviceSessionRepository, RefreshTokenFamilyRep
 from app.repositories.core import RoleRepository, TenantRepository
 from app.repositories.identity_provider import (
     EntraTenantMappingRepository,
+    IdentityProviderCredentialRepository,
     OAuthStateRepository,
 )
 from mip_models.base import SystemRole
@@ -333,6 +334,86 @@ class ProviderAuthService:
         )
 
         return result
+
+    async def refresh_provider_credentials(
+        self,
+        db: AsyncSession,
+        identity_id: uuid.UUID,
+        request_id: str | None = None,
+    ) -> None:
+        """Refresh provider credentials for an identity.
+
+        Fetches the current credentials, decrypts the refresh token, requests a
+        new token set, re-encrypts the new tokens, and persists the update.
+        """
+        repo = IdentityProviderCredentialRepository(db)
+        credential = await repo.get_by_identity_id(identity_id)
+        if not credential:
+            security_event_emitter.emit(
+                SecurityEvent(
+                    event_type=SecurityEventType.LOGIN_FAILED,
+                    outcome=SecurityOutcome.FAILURE,
+                    reason="refresh_failed",
+                    metadata={"provider": "microsoft"},
+                    request_id=request_id,
+                )
+            )
+            raise ProviderAuthError("No provider credentials found for identity.")
+
+        if credential.revoked_at:
+            security_event_emitter.emit(
+                SecurityEvent(
+                    event_type=SecurityEventType.LOGIN_FAILED,
+                    outcome=SecurityOutcome.FAILURE,
+                    reason="refresh_failed",
+                    metadata={"provider": "microsoft"},
+                    request_id=request_id,
+                )
+            )
+            # Do NOT revoke DeviceSession per EDD AD-PR13-012
+            raise ProviderAuthError("Provider credentials have been revoked.")
+
+        try:
+            plain_refresh_token = self._encryption.decrypt_string(
+                credential.encrypted_refresh_token
+            )
+        except Exception as exc:
+            security_event_emitter.emit(
+                SecurityEvent(
+                    event_type=SecurityEventType.LOGIN_FAILED,
+                    outcome=SecurityOutcome.FAILURE,
+                    reason="refresh_failed",
+                    metadata={"provider": "microsoft"},
+                    request_id=request_id,
+                )
+            )
+            raise ProviderAuthError("Failed to decrypt provider refresh token.") from exc
+
+        try:
+            new_tokens = await self._provider_auth.refresh_credentials(plain_refresh_token)
+        except Exception as exc:
+            security_event_emitter.emit(
+                SecurityEvent(
+                    event_type=SecurityEventType.LOGIN_FAILED,
+                    outcome=SecurityOutcome.FAILURE,
+                    reason="refresh_failed",
+                    metadata={"provider": "microsoft"},
+                    request_id=request_id,
+                )
+            )
+            if "invalid_grant" in str(exc).lower():
+                await repo.revoke(credential.id, datetime.now(UTC))
+            raise ProviderAuthError(f"Provider token refresh failed: {exc}") from exc
+
+        credential.encrypted_access_token = self._encryption.encrypt(new_tokens.access_token)
+        if new_tokens.refresh_token:
+            credential.encrypted_refresh_token = self._encryption.encrypt(new_tokens.refresh_token)
+        credential.token_expires_at = new_tokens.expires_at
+        if new_tokens.scopes:
+            credential.scopes = new_tokens.scopes
+        credential.encryption_key_id = self._encryption.key_id
+
+        await db.flush()
 
     async def _find_identity(self, db: AsyncSession, provider_user_id: str) -> Identity | None:
         from sqlalchemy import select

@@ -94,14 +94,25 @@ class EntraIdentityProviderAuth:
             scopes=token_data.get("scope", "").split() if token_data.get("scope") else [],
         )
 
-    async def refresh_credentials(self, identity: object) -> ProviderCredentialSet:
-        """Refresh expired provider credentials for an existing identity.
+    async def refresh_credentials(self, refresh_token: str) -> ProviderCredentialSet:
+        """Refresh expired provider credentials using a valid refresh token."""
+        token_data = await self._token_endpoint_request(
+            grant_type="refresh_token",
+            refresh_token=refresh_token,
+        )
+        access_token = token_data.get("access_token")
+        if not access_token:
+            msg = "Missing access_token in token response."
+            raise ValueError(msg)
 
-        Note: Background refresh is deferred per PR-1.3 design.
-        On-demand refresh requires IdentityProviderCredential repository access.
-        """
-        msg = "Provider credential refresh is not implemented in PR-1.3 Phase 2."
-        raise NotImplementedError(msg)
+        returned_refresh_token = token_data.get("refresh_token") or refresh_token
+
+        return ProviderCredentialSet(
+            access_token=access_token,
+            refresh_token=returned_refresh_token,
+            expires_at=self._compute_expiry(token_data.get("expires_in", 3600)),
+            scopes=token_data.get("scope", "").split() if token_data.get("scope") else [],
+        )
 
     async def _exchange_code(self, code: str, code_verifier: str) -> dict[str, Any]:
         """Exchange authorization code for tokens."""
@@ -125,7 +136,8 @@ class EntraIdentityProviderAuth:
             **kwargs,
         }
 
-        async with httpx.AsyncClient() as client:
+        timeout = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 token_url,
                 data=data,

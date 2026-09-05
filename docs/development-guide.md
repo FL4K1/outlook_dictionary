@@ -46,6 +46,7 @@ Trunk-based development with short-lived feature branches:
 2. Register the router in `apps/api/app/main.py`:
    ```python
    from app.your_module.router import router as your_router
+
    app.include_router(your_router, prefix="/api/v1")
    ```
 
@@ -117,6 +118,7 @@ All exceptions should extend `AppError` from `app.common.exceptions`:
 
 ```python
 from app.common.exceptions import AppError
+
 
 class MailboxNotFoundError(AppError):
     status_code = 404
