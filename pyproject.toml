@@ -6,6 +6,9 @@ name = "mail-intelligence-platform"
 version = "0.1.0"
 description = "Enterprise Mail Intelligence Platform — monorepo root"
 requires-python = ">=3.12"
+dependencies = [
+    "arq>=0.28.0",
+]
 
 [tool.mypy]
 python_version = "3.12"
@@ -55,6 +58,23 @@ omit = ["*/tests/*", "*/__pycache__/*"]
 # files that are not Python source. Ruff ≥0.16.0 formats Python code blocks
 # inside .md files; excluding docs/ prevents that behavior monorepo-wide.
 extend-exclude = ["docs"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S105"]
+"tests/unit/*.py" = ["S105"]
+"apps/**/tests/**/*.py" = ["S105"]
+
+
+
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "python-jose[cryptography]>=3.5.0",
+    "ruff>=0.16.3",
+]
 
 [tool.coverage.report]
 fail_under = 85

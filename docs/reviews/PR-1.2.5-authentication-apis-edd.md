@@ -435,13 +435,16 @@ A refresh token bound to a revoked `DeviceSession` triggers the existing `Refres
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
+
 class TokenRequest(BaseModel):
     grant_type: str
     refresh_token: str
     scope: str | None = None
 
+
 class LogoutRequest(BaseModel):
     refresh_token: str
+
 
 class LogoutAllRequest(BaseModel):
     refresh_token: str

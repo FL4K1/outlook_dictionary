@@ -87,7 +87,7 @@ class IdentityProviderAuth(Protocol):
 
     async def refresh_credentials(
         self,
-        identity: object,  # Identity model instance — avoid circular import
+        refresh_token: str,
     ) -> ProviderCredentialSet:
-        """Refresh expired provider credentials for an existing identity."""
+        """Refresh expired provider credentials using a valid refresh token."""
         ...

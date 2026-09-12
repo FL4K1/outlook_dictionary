@@ -9,10 +9,10 @@ import uuid  # noqa: TC003
 from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import String, Text
-from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from mip_models.base import Base, IdentityMixin
+from mip_models.base import Base, IdentityMixin, INETType, JSONType
 
 
 class AuditLog(Base, IdentityMixin):
@@ -51,12 +51,12 @@ class AuditLog(Base, IdentityMixin):
 
     metadata_dict: Mapped[dict | None] = mapped_column(  # type: ignore[type-arg]
         "metadata",
-        JSONB,
+        JSONType,
         nullable=True,
     )
 
     ip_address: Mapped[str | None] = mapped_column(
-        INET,
+        INETType,
         nullable=True,
     )
 

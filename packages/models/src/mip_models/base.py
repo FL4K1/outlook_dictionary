@@ -12,9 +12,15 @@ import uuid
 from datetime import datetime  # noqa: TC003
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, Boolean, DateTime, LargeBinary, String, func
+from sqlalchemy.dialects.postgresql import ARRAY, BYTEA, INET, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+# Cross-dialect type mappings (Postgres dialect in production, SQLite fallback for testing)
+JSONType = JSON().with_variant(JSONB, "postgresql")
+INETType = String(45).with_variant(INET, "postgresql")
+ARRAYType = JSON().with_variant(ARRAY(String), "postgresql")
+BYTEAType = LargeBinary().with_variant(BYTEA, "postgresql")
 
 
 class Base(DeclarativeBase):
@@ -57,6 +63,7 @@ class SoftDeleteMixin:
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
+        default=True,
         server_default="true",
     )
     deleted_at: Mapped[datetime | None] = mapped_column(

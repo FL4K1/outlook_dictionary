@@ -15,13 +15,14 @@ if TYPE_CHECKING:
     from mip_models.auth import DeviceSession, Role, Session
     from mip_models.tenant import Tenant
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mip_models.base import (
     Base,
     IdentityMixin,
+    JSONType,
     SoftDeleteMixin,
     TimestampMixin,
 )
@@ -55,11 +56,13 @@ class User(Base, IdentityMixin, TimestampMixin, SoftDeleteMixin):
     is_platform_admin: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
+        default=False,
         server_default="false",
         comment="Superadmin flag (platform operators only)",
     )
 
     last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
         comment="Last successful login timestamp",
     )
@@ -137,8 +140,9 @@ class Identity(Base, IdentityMixin, TimestampMixin):
     )
 
     provider_metadata: Mapped[dict | None] = mapped_column(  # type: ignore[type-arg]
-        JSONB,
+        JSONType,
         nullable=True,
+        default=dict,
         server_default="{}",
         comment="IdP-specific claims (tenant ID, groups, etc.)",
     )
@@ -192,6 +196,7 @@ class Membership(Base, IdentityMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
+        default=True,
         server_default="true",
         comment="Membership active/revoked",
     )
@@ -204,6 +209,7 @@ class Membership(Base, IdentityMixin, TimestampMixin):
     )
 
     joined_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
         comment="When the membership was activated",
     )

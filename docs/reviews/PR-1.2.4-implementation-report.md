@@ -114,11 +114,11 @@ FastAPI reverses registration order. Current stack:
 
 ```python
 # Code registration (innermost first)
-app.add_middleware(SecurityHeadersMiddleware)           # Innermost
+app.add_middleware(SecurityHeadersMiddleware)  # Innermost
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RequestIdMiddleware)
-app.add_middleware(AuthenticationMiddleware, ...)       # Outermost (after CORS)
-app.add_middleware(CORSMiddleware, ...)                  # Outermost
+app.add_middleware(AuthenticationMiddleware, ...)  # Outermost (after CORS)
+app.add_middleware(CORSMiddleware, ...)  # Outermost
 ```
 
 **Effective execution order:**

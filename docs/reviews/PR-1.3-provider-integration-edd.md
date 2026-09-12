@@ -255,7 +255,7 @@ A new identity provider abstraction is required. The existing `MailAuthProvider`
 @runtime_checkable
 class IdentityProviderAuth(Protocol):
     """Interface for authenticating with an external identity provider."""
-    
+
     async def get_authorization_url(
         self,
         redirect_uri: str,
@@ -265,7 +265,7 @@ class IdentityProviderAuth(Protocol):
     ) -> str:
         """Generate the OAuth authorization URL with PKCE."""
         ...
-    
+
     async def validate_callback(
         self,
         code: str,
@@ -276,7 +276,7 @@ class IdentityProviderAuth(Protocol):
     ) -> IdentityVerificationResult:
         """Validate callback, exchange code, verify ID token."""
         ...
-    
+
     async def refresh_credentials(
         self,
         identity: Identity,
@@ -288,6 +288,7 @@ class IdentityProviderAuth(Protocol):
 @dataclass(frozen=True)
 class IdentityVerificationResult:
     """Result of Entra ID identity verification."""
+
     provider_user_id: str
     provider_email: str | None
     provider_metadata: dict[str, object]
@@ -300,6 +301,7 @@ class IdentityVerificationResult:
 @dataclass(frozen=True)
 class ProviderCredentialSet:
     """OAuth tokens returned by the identity provider."""
+
     access_token: str
     refresh_token: str
     expires_at: datetime
@@ -692,6 +694,7 @@ The `ProviderCredential` model exists at `packages/models/src/mip_models/mail.py
 ```python
 class ProviderCredential(Base, IdentityMixin, TimestampMixin):
     """Encrypted OAuth tokens for mail provider access."""
+
     mail_account_id: Mapped[uuid.UUID]  # FK to mail_accounts (UNIQUE)
     tenant_id: Mapped[uuid.UUID]
     encrypted_access_token: Mapped[bytes]  # AES-256-GCM encrypted
@@ -724,8 +727,9 @@ APPROVED FOR PR-1.3 DESIGN.
 ```python
 class IdentityProviderCredential(Base, IdentityMixin, TimestampMixin):
     """Encrypted OAuth tokens for an external identity provider."""
+
     __tablename__ = "identity_provider_credentials"
-    
+
     identity_id: Mapped[uuid.UUID]  # FK to identities.id, UNIQUE
     tenant_id: Mapped[uuid.UUID]  # FK to tenants.id, denormalized for query safety
     provider: Mapped[str]  # "microsoft"
@@ -901,8 +905,7 @@ async def create_session_tokens(
     user_agent: str | None = None,
     remember_me: bool = False,
     request_id: str | None = None,
-) -> AuthenticationResult:
-    ...
+) -> AuthenticationResult: ...
 ```
 
 ### 16.2 PR-1.3 DESIGN DECISION

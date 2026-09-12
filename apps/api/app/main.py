@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth.entra_router import router as entra_router
 from app.api.auth.router import router as auth_router
 from app.auth.middleware import AuthenticationMiddleware
 from app.auth.policy import PolicyEngine
@@ -115,5 +116,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # --- Routers ---
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(entra_router)
 
     return app

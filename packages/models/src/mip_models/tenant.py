@@ -21,13 +21,14 @@ if TYPE_CHECKING:
 
 import uuid  # noqa: TC003
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import ForeignKey, String, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mip_models.base import (
     Base,
     IdentityMixin,
+    JSONType,
     SoftDeleteMixin,
     TimestampMixin,
 )
@@ -72,9 +73,10 @@ class Tenant(Base, IdentityMixin, TimestampMixin, SoftDeleteMixin):
     )
 
     settings: Mapped[dict | None] = mapped_column(  # type: ignore[type-arg]
-        JSONB,
+        JSONType,
         nullable=True,
-        server_default="{}",
+        default=dict,
+        server_default=text("'{}'::jsonb"),
         comment="Tenant-specific configuration (retention, feature flags)",
     )
 

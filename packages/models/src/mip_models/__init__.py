@@ -25,7 +25,19 @@ from mip_models.identity_provider import (
     IdentityProviderCredential,
     OAuthState,
 )
-from mip_models.mail import MailAccount, ProviderCredential
+from mip_models.mail import (
+    MailAccount,
+    MailFolder,
+    MailMessage,
+    MailMessageFolder,
+    MailMessageParticipant,
+    MailSyncState,
+    MailSyncStateValue,
+    OutboxEvent,
+    OutboxEventStatus,
+    ParticipantRole,
+    ProviderCredential,
+)
 from mip_models.organization import Organization
 from mip_models.tenant import Tenant
 from mip_models.user import Identity, Membership, User
@@ -40,9 +52,18 @@ __all__ = [
     "Identity",
     "IdentityProviderCredential",
     "MailAccount",
+    "MailFolder",
+    "MailMessage",
+    "MailMessageFolder",
+    "MailMessageParticipant",
+    "MailSyncState",
+    "MailSyncStateValue",
     "Membership",
     "OAuthState",
     "Organization",
+    "OutboxEvent",
+    "OutboxEventStatus",
+    "ParticipantRole",
     "Permission",
     "ProviderCredential",
     "RefreshTokenFamily",
