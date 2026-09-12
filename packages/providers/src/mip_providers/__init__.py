@@ -10,23 +10,53 @@ Key exports:
 """
 
 from mip_providers.base import (
+    UNSET,
     EmailAddress,
     MailAuthProvider,
     MailSyncProvider,
     MailWebhookProvider,
     NormalizedEmail,
+    ProviderDeltaPage,
+    ProviderEmailAddress,
+    ProviderFolder,
+    ProviderMessage,
+    ProviderRemoval,
     SyncResult,
     TokenSet,
+    UnsetType,
 )
+from mip_providers.errors import (
+    AuthExpiredError,
+    DeltaCursorExpiredError,
+    ProviderError,
+    ProviderNotFoundError,
+    ProviderPermissionError,
+    ProviderRateLimitedError,
+)
+from mip_providers.mail.graph import MicrosoftGraphMailAdapter
 from mip_providers.registry import ProviderRegistry
 
 __all__ = [
+    "UNSET",
+    "AuthExpiredError",
+    "DeltaCursorExpiredError",
     "EmailAddress",
     "MailAuthProvider",
     "MailSyncProvider",
     "MailWebhookProvider",
+    "MicrosoftGraphMailAdapter",
     "NormalizedEmail",
+    "ProviderDeltaPage",
+    "ProviderEmailAddress",
+    "ProviderError",
+    "ProviderFolder",
+    "ProviderMessage",
+    "ProviderNotFoundError",
+    "ProviderPermissionError",
+    "ProviderRateLimitedError",
     "ProviderRegistry",
+    "ProviderRemoval",
     "SyncResult",
     "TokenSet",
+    "UnsetType",
 ]

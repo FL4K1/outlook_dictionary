@@ -14,11 +14,84 @@ Design decisions:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from datetime import datetime  # noqa: TC003
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
-    from datetime import datetime
+
+
+class UnsetType:
+    """Sentinel type representing an absent field in a provider update."""
+
+    def __repr__(self) -> str:
+        return "<UNSET>"
+
+    def __bool__(self) -> bool:
+        return False
+
+
+UNSET = UnsetType()
+
+
+@dataclass(frozen=True)
+class ProviderEmailAddress:
+    """A single provider email address with optional display name."""
+
+    email: str
+    name: str = ""
+
+
+@dataclass(frozen=True)
+class ProviderFolder:
+    """Provider-neutral representation of a mail folder."""
+
+    provider_folder_id: str
+    name: str
+    parent_id: str | None = None
+    is_active: bool = True
+
+
+@dataclass(frozen=True)
+class ProviderRemoval:
+    """Provider-neutral representation of a message removal from a folder scope."""
+
+    provider_message_id: str
+    reason: str = "folder_removed"
+
+
+@dataclass(frozen=True)
+class ProviderMessage:
+    """Presence-aware provider message model supporting 3-way field semantics.
+
+    - Present value: actual value (str, dict, list, datetime, bool, etc.)
+    - Present null: None (explicitly cleared)
+    - Absent field: UNSET (unmodified)
+    """
+
+    provider_message_id: str
+    subject: str | UnsetType | None = UNSET
+    body: dict[str, Any] | UnsetType | None = UNSET
+    body_preview: str | UnsetType | None = UNSET
+    sender: ProviderEmailAddress | UnsetType | None = UNSET
+    recipients_to: list[ProviderEmailAddress] | UnsetType | None = UNSET
+    recipients_cc: list[ProviderEmailAddress] | UnsetType | None = UNSET
+    recipients_bcc: list[ProviderEmailAddress] | UnsetType | None = UNSET
+    received_date_time: datetime | UnsetType | None = UNSET
+    has_attachments: bool | UnsetType | None = UNSET
+    is_read: bool | UnsetType | None = UNSET
+    provider_metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ProviderDeltaPage:
+    """Result page returned by a message delta fetch."""
+
+    messages: list[ProviderMessage]
+    removals: list[ProviderRemoval]
+    next_continuation: str | None
+    has_more: bool
+    is_delta_checkpoint: bool
 
 
 @dataclass(frozen=True)

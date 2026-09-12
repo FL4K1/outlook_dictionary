@@ -10,7 +10,7 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.auth.events import (
     SecurityEvent,
@@ -28,6 +28,7 @@ from app.repositories.identity_provider import (
     IdentityProviderCredentialRepository,
     OAuthStateRepository,
 )
+from app.repositories.mail import MailAccountRepository
 from mip_models.base import SystemRole
 from mip_models.identity_provider import IdentityProviderCredential
 from mip_models.user import Identity, Membership, User
@@ -415,7 +416,158 @@ class ProviderAuthService:
 
         await db.flush()
 
+    async def refresh_mail_account_credentials(
+        self,
+        db: AsyncSession,
+        mail_account_id: uuid.UUID,
+        worker_id: uuid.UUID,
+        expected_generation: int | None = None,
+        lease_duration: timedelta = timedelta(minutes=5),
+        request_id: str | None = None,
+    ) -> Any:
+        """Refresh mail account provider credentials using fenced CAS primitives."""
+        from mip_providers.identity.base import ProviderCredentialSet
+
+        account_repo = MailAccountRepository(db)
+
+        # 1. Read current account from DB
+        account = await account_repo.get(mail_account_id)
+        if not account:
+            raise ProviderAuthError("Mail account not found.")
+
+        # Check generation optimization before lock if expected_generation provided
+        if expected_generation is not None and account.credential_generation > expected_generation:
+            cred = await self._get_provider_credential_by_account(db, mail_account_id)
+            if cred:
+                decrypted_access = self._encryption.decrypt_string(cred.encrypted_access_token)
+                decrypted_refresh = self._encryption.decrypt_string(cred.encrypted_refresh_token)
+                return ProviderCredentialSet(
+                    access_token=decrypted_access,
+                    refresh_token=decrypted_refresh,
+                    expires_at=cred.token_expires_at,
+                    scopes=cred.scopes or [],
+                )
+
+        # 2. Acquire refresh lease via CAS
+        lease_info = await account_repo.acquire_refresh_lease(
+            mail_account_id, worker_id, lease_duration
+        )
+        if lease_info is None:
+            # Active lease owned by another worker
+            reloaded_account = await account_repo.get(mail_account_id)
+            if (
+                reloaded_account
+                and expected_generation is not None
+                and reloaded_account.credential_generation > expected_generation
+            ):
+                cred = await self._get_provider_credential_by_account(db, mail_account_id)
+                if cred:
+                    decrypted_access = self._encryption.decrypt_string(cred.encrypted_access_token)
+                    decrypted_refresh = self._encryption.decrypt_string(
+                        cred.encrypted_refresh_token
+                    )
+                    return ProviderCredentialSet(
+                        access_token=decrypted_access,
+                        refresh_token=decrypted_refresh,
+                        expires_at=cred.token_expires_at,
+                        scopes=cred.scopes or [],
+                    )
+            raise ProviderAuthError("Active refresh lease owned by another worker.")
+
+        lease_version, current_gen = lease_info
+
+        # Re-check generation after lease acquisition
+        if expected_generation is not None and current_gen > expected_generation:
+            await account_repo.release_refresh_lease(mail_account_id, worker_id, lease_version)
+            await db.commit()
+            cred = await self._get_provider_credential_by_account(db, mail_account_id)
+            if cred:
+                decrypted_access = self._encryption.decrypt_string(cred.encrypted_access_token)
+                decrypted_refresh = self._encryption.decrypt_string(cred.encrypted_refresh_token)
+                return ProviderCredentialSet(
+                    access_token=decrypted_access,
+                    refresh_token=decrypted_refresh,
+                    expires_at=cred.token_expires_at,
+                    scopes=cred.scopes or [],
+                )
+
+        cred = await self._get_provider_credential_by_account(db, mail_account_id)
+        if not cred:
+            await account_repo.release_refresh_lease(mail_account_id, worker_id, lease_version)
+            await db.commit()
+            raise ProviderAuthError("Provider credentials not found for mail account.")
+
+        # 3. Decrypt refresh token
+        try:
+            plain_refresh_token = self._encryption.decrypt_string(cred.encrypted_refresh_token)
+        except Exception as exc:
+            await account_repo.release_refresh_lease(mail_account_id, worker_id, lease_version)
+            await db.commit()
+            raise ProviderAuthError(f"Failed to decrypt refresh token: {exc}") from exc
+
+        # 4. Call provider refresh API outside DB transaction
+        await db.commit()
+        try:
+            new_tokens = await self._provider_auth.refresh_credentials(plain_refresh_token)
+        except Exception as exc:
+            await account_repo.release_refresh_lease(mail_account_id, worker_id, lease_version)
+            await db.commit()
+            err_str = str(exc).lower()
+            if "invalid_grant" in err_str or "revoked" in err_str or "expired" in err_str:
+                account.status = "reauth_required"
+                await db.commit()
+                security_event_emitter.emit(
+                    SecurityEvent(
+                        event_type=SecurityEventType.LOGIN_FAILED,
+                        outcome=SecurityOutcome.FAILURE,
+                        reason="refresh_failed",
+                        metadata={"provider": account.provider_type},
+                        request_id=request_id,
+                    )
+                )
+            raise ProviderAuthError(f"Provider token refresh failed: {exc}") from exc
+
+        # 5. Encrypt new credential material
+        encrypted_access = self._encryption.encrypt(new_tokens.access_token)
+        encrypted_refresh = (
+            self._encryption.encrypt(new_tokens.refresh_token)
+            if new_tokens.refresh_token
+            else cred.encrypted_refresh_token
+        )
+
+        # 6. Revalidate via CAS fencing
+        cas_ok = await account_repo.finalize_refresh_lease(
+            mail_account_id, worker_id, lease_version
+        )
+        if not cas_ok:
+            raise ProviderAuthError("Stale worker refresh CAS failed.")
+
+        # Atomically update ProviderCredential in the same transaction
+        cred.encrypted_access_token = encrypted_access
+        if new_tokens.refresh_token:
+            cred.encrypted_refresh_token = encrypted_refresh
+        cred.token_expires_at = new_tokens.expires_at
+        if new_tokens.scopes:
+            cred.scopes = new_tokens.scopes
+        cred.encryption_key_id = self._encryption.key_id
+
+        await db.commit()
+        return new_tokens
+
+    async def _get_provider_credential_by_account(
+        self, db: AsyncSession, mail_account_id: uuid.UUID
+    ) -> Any:
+        from sqlalchemy import select
+
+        from mip_models.mail import ProviderCredential
+
+        result = await db.execute(
+            select(ProviderCredential).where(ProviderCredential.mail_account_id == mail_account_id)
+        )
+        return result.scalars().first()
+
     async def _find_identity(self, db: AsyncSession, provider_user_id: str) -> Identity | None:
+
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 

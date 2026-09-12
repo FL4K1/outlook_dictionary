@@ -8,11 +8,13 @@ version = "0.1.0"
 description = "Mail Intelligence Platform — Background task workers (sync, indexer, embedder)"
 requires-python = ">=3.12"
 dependencies = [
+    "arq>=0.26.0",
     "redis>=5.2.0",
     "mip-models",
     "mip-providers",
     "mip-email-parser",
 ]
+
 
 [project.optional-dependencies]
 dev = [

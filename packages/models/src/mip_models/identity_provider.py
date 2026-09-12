@@ -10,11 +10,13 @@ import uuid  # noqa: TC003
 from datetime import datetime  # noqa: TC003
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mip_models.base import (
+    ARRAYType,
     Base,
+    BYTEAType,
     IdentityMixin,
     TimestampMixin,
 )
@@ -60,11 +62,13 @@ class IdentityProviderCredential(Base, IdentityMixin, TimestampMixin):
     )
 
     encrypted_access_token: Mapped[bytes] = mapped_column(
+        BYTEAType,
         nullable=False,
         comment="AES-256-GCM encrypted access token",
     )
 
     encrypted_refresh_token: Mapped[bytes] = mapped_column(
+        BYTEAType,
         nullable=False,
         comment="AES-256-GCM encrypted refresh token",
     )
@@ -76,7 +80,7 @@ class IdentityProviderCredential(Base, IdentityMixin, TimestampMixin):
     )
 
     scopes: Mapped[list[str] | None] = mapped_column(
-        ARRAY(String),
+        ARRAYType,
         nullable=True,
         comment="OAuth scopes granted",
     )

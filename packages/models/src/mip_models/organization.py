@@ -15,13 +15,13 @@ if TYPE_CHECKING:
 
 from datetime import datetime  # noqa: TC003
 
-from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mip_models.base import (
     Base,
     IdentityMixin,
+    JSONType,
     SoftDeleteMixin,
     TimestampMixin,
 )
@@ -64,9 +64,10 @@ class Organization(Base, IdentityMixin, TimestampMixin, SoftDeleteMixin):
     )
 
     settings: Mapped[dict | None] = mapped_column(  # type: ignore[type-arg]
-        JSONB,
+        JSONType,
         nullable=True,
-        server_default="{}",
+        default=dict,
+        server_default=text("'{}'::jsonb"),
         comment="Organization-level feature flags and billing metadata",
     )
 

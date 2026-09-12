@@ -16,12 +16,14 @@ if TYPE_CHECKING:
     from mip_models.user import Identity, Membership, User
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import ARRAY, INET, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mip_models.base import (
+    ARRAYType,
     Base,
     IdentityMixin,
+    INETType,
     TimestampMixin,
 )
 
@@ -173,7 +175,7 @@ class Session(Base, IdentityMixin, TimestampMixin):
     )
 
     ip_address: Mapped[str | None] = mapped_column(
-        INET,
+        INETType,
         nullable=True,
     )
 
@@ -236,7 +238,7 @@ class DeviceSession(Base, IdentityMixin, TimestampMixin):
     )
 
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(INETType, nullable=True)
 
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -406,7 +408,7 @@ class ApiKey(Base, IdentityMixin, TimestampMixin):
     )
 
     scopes: Mapped[list[str] | None] = mapped_column(
-        ARRAY(String),
+        ARRAYType,
         nullable=True,
         comment="Subset of permissions granted",
     )
