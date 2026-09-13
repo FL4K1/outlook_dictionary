@@ -63,10 +63,14 @@ async def apply_alembic_migrations(db_url: str) -> None:
 async def pg_engine():
     """Create async engine connected to PostgreSQL migrated strictly via Alembic."""
     engine = create_async_engine(POSTGRES_TEST_URL, poolclass=NullPool, echo=False)
-    async with engine.begin() as conn:
-        await conn.execute(text("DROP SCHEMA public CASCADE;"))
-        await conn.execute(text("CREATE SCHEMA public;"))
-    await engine.dispose()
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP SCHEMA public CASCADE;"))
+            await conn.execute(text("CREATE SCHEMA public;"))
+        await engine.dispose()
+    except (OSError, Exception) as err:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL database not available at {POSTGRES_TEST_URL}: {err}")
 
     await apply_alembic_migrations(POSTGRES_TEST_URL)
 

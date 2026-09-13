@@ -150,7 +150,6 @@ class SyncOrchestrator:
             )
         await self.session.commit()
 
-
         total_processed = 0
         total_mutated = 0
         total_removals = 0

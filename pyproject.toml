@@ -57,7 +57,7 @@ omit = ["*/tests/*", "*/__pycache__/*"]
 # Exclude documentation from linting and formatting — docs/ contains Markdown
 # files that are not Python source. Ruff ≥0.16.0 formats Python code blocks
 # inside .md files; excluding docs/ prevents that behavior monorepo-wide.
-extend-exclude = ["docs"]
+extend-exclude = ["docs", "docs/**"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S105"]

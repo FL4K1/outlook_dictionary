@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from arq import cron
 from arq.connections import RedisSettings
@@ -111,8 +111,8 @@ async def outbox_polling_cron(ctx: dict[str, Any]) -> int:
 class WorkerSettings:
     """ARQ Worker configuration settings."""
 
-    functions = [process_outbox_event_job, outbox_polling_cron]
-    cron_jobs = [cron(outbox_polling_cron, second={0, 10, 20, 30, 40, 50})]
+    functions: ClassVar = [process_outbox_event_job, outbox_polling_cron]
+    cron_jobs: ClassVar = [cron(outbox_polling_cron, second={0, 10, 20, 30, 40, 50})]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings(
