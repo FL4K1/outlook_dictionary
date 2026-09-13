@@ -137,8 +137,22 @@ def reset_harness() -> AsyncGenerator[None, None]:
 
 @pytest.fixture
 async def es_client() -> AsyncGenerator[httpx.AsyncClient, None]:
-    async with httpx.AsyncClient(base_url=ES_TEST_URL, timeout=5.0) as client:
+    client = httpx.AsyncClient(base_url=ES_TEST_URL, timeout=5.0)
+    try:
+        resp = await client.get("/")
+        if resp.status_code != 200:
+            raise RuntimeError(f"Elasticsearch ping status {resp.status_code}")
+    except Exception as err:
+        await client.aclose()
+        if os.getenv("CI") == "true":
+            msg = f"Elasticsearch required by CI is unavailable at {ES_TEST_URL}: {err}"
+            pytest.fail(msg)
+        pytest.skip(f"Elasticsearch unavailable at {ES_TEST_URL}: {err}")
+
+    try:
         yield client
+    finally:
+        await client.aclose()
 
 
 @pytest.fixture
