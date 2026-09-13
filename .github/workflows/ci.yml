@@ -59,6 +59,20 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mip
+          POSTGRES_PASSWORD: mip_dev_password
+          POSTGRES_DB: mail_intelligence
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -75,11 +89,15 @@ jobs:
           pip install -e "packages/ai"
           pip install -e "packages/email_parser"
           pip install -e "apps/api[dev]"
+          pip install -e "apps/workers"
 
       - name: Run tests
-        run: pytest apps/api/tests/ -v
+        run: pytest -v
         env:
           APP_ENV: testing
+          CI: "true"
+          TEST_DATABASE_URL: postgresql+asyncpg://mip:mip_dev_password@localhost:5433/mail_intelligence
+          DATABASE_URL: postgresql+asyncpg://mip:mip_dev_password@localhost:5433/mail_intelligence
 
   docker:
     name: Docker Build Validation

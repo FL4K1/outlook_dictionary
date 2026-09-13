@@ -66,8 +66,11 @@ async def pg_engine():
             await conn.execute(text("DROP SCHEMA public CASCADE;"))
             await conn.execute(text("CREATE SCHEMA public;"))
         await engine.dispose()
-    except (OSError, Exception) as err:
+    except Exception as err:
         await engine.dispose()
+        if os.getenv("CI") == "true":
+            msg = f"PostgreSQL database required by CI unavailable at {POSTGRES_TEST_URL}: {err}"
+            pytest.fail(msg)
         pytest.skip(f"PostgreSQL database not available at {POSTGRES_TEST_URL}: {err}")
 
     await apply_alembic_migrations(POSTGRES_TEST_URL)
