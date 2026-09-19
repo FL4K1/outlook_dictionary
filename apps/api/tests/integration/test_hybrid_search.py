@@ -41,6 +41,8 @@ async def es_client() -> AsyncGenerator[httpx.AsyncClient, None]:
             raise RuntimeError(f"Elasticsearch ping status {resp.status_code}")
     except Exception as err:
         await client.aclose()
+        if os.getenv("CI") == "true":
+            pytest.fail(f"Elasticsearch required by CI is unavailable: {err}")
         pytest.skip(f"Elasticsearch unavailable: {err}")
 
     try:
@@ -116,7 +118,9 @@ async def seeded_es_hybrid(es_client: httpx.AsyncClient) -> AsyncGenerator[str, 
             "mail_account_id": "account-1",
             "folder_ids": ["folder-b"],
             "subject": "New Campaign Launch",
-            "body": "The social media marketing campaign will start next week. Please review graphics.",
+            "body": (
+                "The social media marketing campaign will start next week. Please review graphics."
+            ),
             "sender": "marketing@example.com",
             "is_deleted": False,
             "received_date_time": "2026-09-02T10:00:00Z",
@@ -158,10 +162,8 @@ async def test_hybrid_search_financial(
 
     query = "money and spreadsheets"
 
-    # Lexical mode should fail since 'money and spreadsheets' doesn't exactly match 'revenue' and 'Q3'
+    # Lexical mode should fail since 'money and spreadsheets' doesn't match 'revenue' & 'Q3'
     resp = await api_client.post("/search/mail", json={"query": query, "search_mode": "lexical"})
-    if resp.status_code != 200:
-        print(f"LEXICAL FAILED: {resp.text}")
     assert resp.status_code == 200
     data = resp.json()
     # It might strictly match "spreadsheets", so results might be 1. We just ensure it runs.
@@ -170,8 +172,6 @@ async def test_hybrid_search_financial(
     resp = await api_client.post(
         "/search/mail", json={"query": "financial spreadsheet report", "search_mode": "hybrid"}
     )
-    if resp.status_code != 200:
-        print(f"HYBRID FAILED: {resp.text}")
     assert resp.status_code == 200
     data = resp.json()
 

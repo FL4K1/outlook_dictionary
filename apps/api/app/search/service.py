@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 class SearchService:
     """Service to handle Mail Search operations against Elasticsearch."""
 
-    def __init__(self, es_adapter: ElasticsearchSearchAdapter, embedding_provider: Any = None) -> None:
+    def __init__(
+        self, es_adapter: ElasticsearchSearchAdapter, embedding_provider: Any = None
+    ) -> None:
         self.es_adapter = es_adapter
         self.embedding_provider = embedding_provider
 
@@ -78,23 +80,21 @@ class SearchService:
                     )
 
         query: dict[str, Any] = {"bool": {"filter": must_filters}}
-
-        if request.query and request.query.strip():
-            # Apply BM25 query for pure lexical, hybrid, or if vector generation failed
-            if request.search_mode in ("lexical", "hybrid") or not query_vector:
-                query["bool"]["must"] = {
-                    "multi_match": {
-                        "query": request.query.strip(),
-                        "fields": [
-                            "subject^2",
-                            "sender^1.5",
-                            "participants.name",
-                            "participants.email",
-                            "body",
-                        ],
-                        "type": "best_fields",
-                    }
+        query_text = request.query.strip() if request.query else ""
+        if query_text and (request.search_mode in ("lexical", "hybrid") or not query_vector):
+            query["bool"]["must"] = {
+                "multi_match": {
+                    "query": query_text,
+                    "fields": [
+                        "subject^2",
+                        "sender^1.5",
+                        "participants.name",
+                        "participants.email",
+                        "body",
+                    ],
+                    "type": "best_fields",
                 }
+            }
 
         body: dict[str, Any] = {
             "query": query,

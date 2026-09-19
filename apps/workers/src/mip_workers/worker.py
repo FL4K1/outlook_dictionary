@@ -35,9 +35,9 @@ async def startup(ctx: dict[str, Any]) -> None:
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     es_adapter = ElasticsearchMailAdapter()
 
-    # Dynamically select based on configuration in production, mocking for now
-    from mip_ai.embeddings.mock import DeterministicMockEmbeddingProvider
-    provider = DeterministicMockEmbeddingProvider()
+    from mip_ai.embeddings import get_embedding_provider
+
+    provider = get_embedding_provider()
 
     ctx["db_engine"] = engine
     ctx["sessionmaker"] = sessionmaker

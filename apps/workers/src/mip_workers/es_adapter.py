@@ -6,6 +6,7 @@ Handles version conflicts (HTTP 409) as idempotent successes per the Mail Sync E
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -215,10 +216,8 @@ class ElasticsearchMailAdapter:
 
             retry_after: float | None = None
             if "Retry-After" in response.headers:
-                try:
+                with contextlib.suppress(ValueError):
                     retry_after = float(response.headers["Retry-After"])
-                except ValueError:
-                    pass
 
             if response.status_code in (500, 502, 503, 504, 429):
                 raise RetryableElasticsearchError(

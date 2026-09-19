@@ -187,9 +187,11 @@ class OutboxWorker:
                     lease_version,
                     new_status=OutboxEventStatus.DONE,
                 )
-                if cas_ok and self.arq_redis is not None and not message.is_deleted:  # noqa: SIM102
-                    semantic_text = f"Subject: {message.subject or ''}\nFrom: {message.sender or ''}\n\n{message.body_preview or ''}"
-                    semantic_text = semantic_text[:2000]
+                if cas_ok and self.arq_redis is not None and not message.is_deleted:
+                    subj = message.subject or ""
+                    sndr = message.sender or ""
+                    body = message.body_preview or ""
+                    semantic_text = f"Subject: {subj}\nFrom: {sndr}\n\n{body}"[:2000]
                     await self.arq_redis.enqueue_job(
                         "embed_message_job",
                         str(message.id),
