@@ -78,7 +78,7 @@ class ElasticsearchMailAdapter:
         url = f"{self.base_url}/{index_name}/_doc/{doc_id}"
         params = {
             "version": str(version),
-            "version_type": "external",
+            "version_type": "external_gte",
         }
 
         own_client = False
