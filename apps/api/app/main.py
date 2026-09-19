@@ -113,9 +113,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # --- Exception Handlers ---
     register_exception_handlers(app)
 
+    from app.api.search.router import router as search_router
+
     # --- Routers ---
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(entra_router)
+    app.include_router(search_router)
 
     return app
