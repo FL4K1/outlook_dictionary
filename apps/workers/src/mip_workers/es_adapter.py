@@ -150,3 +150,93 @@ class ElasticsearchMailAdapter:
         finally:
             if own_client:
                 await client.aclose()
+
+    async def update_embeddings(
+        self,
+        index_name: str,
+        document_id: str,
+        semantic_vector: list[float],
+        embedding_model_id: str,
+        version: int,
+    ) -> bool:
+        """Perform a scripted partial update to inject semantic vectors.
+
+        Only updates if the requested version is >= the current document version.
+        This provides idempotency and stale-job rejection.
+        Returns True if successful, False if skipped due to version conflict or missing doc.
+        """
+        url = f"{self.base_url}/{index_name}/_update/{document_id}"
+
+        # We use a painles script to only apply the vector if the embedding
+        # is for the same (or newer) version of the document.
+        body = {
+            "script": {
+                "source": """
+                    if (ctx._source.version != null && ctx._source.version > params.version) {
+                        ctx.op = 'none';
+                    } else {
+                        ctx._source.semantic_vector = params.semantic_vector;
+                        ctx._source.embedding_model_id = params.embedding_model_id;
+                        ctx._source.embedding_version = params.version;
+                    }
+                """,
+                "lang": "painless",
+                "params": {
+                    "semantic_vector": semantic_vector,
+                    "embedding_model_id": embedding_model_id,
+                    "version": version,
+                },
+            }
+        }
+
+        own_client = False
+        client = self._client
+        if client is None:
+            client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+            own_client = True
+
+        try:
+            response = await client.post(url, json=body)
+
+            if response.status_code in (200, 201):
+                # We can check response.json().get("result")
+                # If 'noop', then the script bypassed. We can treat both as success.
+                return True
+
+            if response.status_code == 404:
+                # Document was deleted or hasn't arrived yet
+                logger.warning(
+                    "Doc %s not found for embedding update in %s", document_id, index_name
+                )
+                return False
+
+            if response.status_code == 409:
+                return False
+
+            retry_after: float | None = None
+            if "Retry-After" in response.headers:
+                try:
+                    retry_after = float(response.headers["Retry-After"])
+                except ValueError:
+                    pass
+
+            if response.status_code in (500, 502, 503, 504, 429):
+                raise RetryableElasticsearchError(
+                    f"Elasticsearch transient HTTP {response.status_code}: {response.text[:200]}",
+                    status_code=response.status_code,
+                    retry_after=retry_after,
+                )
+
+            raise PermanentElasticsearchError(
+                f"Elasticsearch permanent HTTP {response.status_code}: {response.text[:200]}",
+                status_code=response.status_code,
+            )
+
+        except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            raise RetryableElasticsearchError(
+                f"Elasticsearch network/timeout error: {exc}",
+                status_code=None,
+            ) from exc
+        finally:
+            if own_client:
+                await client.aclose()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime  # noqa: TC003 — Pydantic requires runtime access with PEP 563
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -52,6 +52,10 @@ class MailSearchRequest(BaseModel):
         ge=1,
         le=100,
         description="Number of results to return per page.",
+    )
+    search_mode: Literal["lexical", "semantic", "hybrid"] = Field(
+        default="hybrid",
+        description="Retrieval mode. Semantic/hybrid perform vector search fallback on error.",
     )
 
 

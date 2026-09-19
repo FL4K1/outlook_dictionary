@@ -58,31 +58,46 @@ class SearchService:
                 range_filter["lte"] = request.to_date.isoformat()
             must_filters.append({"range": {"received_date_time": range_filter}})
 
+        query_vector = None
+        if (
+            request.search_mode in ("semantic", "hybrid")
+            and request.query
+            and request.query.strip()
+        ):
+            try:
+                from mip_ai.embeddings.mock import DeterministicMockEmbeddingProvider
+
+                provider = DeterministicMockEmbeddingProvider()
+                result = await provider.embed([request.query.strip()])
+                if result.vectors:
+                    query_vector = result.vectors[0]
+            except Exception as e:
+                logger.warning(
+                    "Query embedding failed, falling back to lexical if allowable: %s", e
+                )
+
         query: dict[str, Any] = {"bool": {"filter": must_filters}}
 
         if request.query and request.query.strip():
-            query["bool"]["must"] = {
-                "multi_match": {
-                    "query": request.query.strip(),
-                    # Simple text matching against subject, body, sender, and participants
-                    "fields": [
-                        "subject^2",
-                        "sender^1.5",
-                        "participants.name",
-                        "participants.email",
-                        "body",
-                    ],
-                    "type": "best_fields",
+            # Apply BM25 query for pure lexical, hybrid, or if vector generation failed
+            if request.search_mode in ("lexical", "hybrid") or not query_vector:
+                query["bool"]["must"] = {
+                    "multi_match": {
+                        "query": request.query.strip(),
+                        "fields": [
+                            "subject^2",
+                            "sender^1.5",
+                            "participants.name",
+                            "participants.email",
+                            "body",
+                        ],
+                        "type": "best_fields",
+                    }
                 }
-            }
 
         body: dict[str, Any] = {
             "query": query,
             "size": request.page_size,
-            "sort": [
-                {"received_date_time": {"order": "desc", "missing": "_last"}},
-                {"id": "desc"},  # Tie-breaking on document ID
-            ],
             "_source": [
                 "id",
                 "mail_account_id",
@@ -95,6 +110,28 @@ class SearchService:
                 "has_attachments",
             ],
         }
+
+        if query_vector:
+            body["knn"] = {
+                "field": "semantic_vector",
+                "query_vector": query_vector,
+                "k": request.page_size,
+                "num_candidates": max(request.page_size * 5, 100),
+                "filter": must_filters,
+            }
+
+        # Sorting: Score relevance if querying, otherwise strict time-based
+        if request.query and request.query.strip():
+            body["sort"] = [
+                {"_score": {"order": "desc"}},
+                {"received_date_time": {"order": "desc", "missing": "_last"}},
+                {"id": "desc"},
+            ]
+        else:
+            body["sort"] = [
+                {"received_date_time": {"order": "desc", "missing": "_last"}},
+                {"id": "desc"},
+            ]
 
         if request.search_after:
             body["search_after"] = request.search_after

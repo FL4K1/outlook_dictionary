@@ -52,12 +52,14 @@ class OutboxWorker:
         self,
         session: AsyncSession,
         es_adapter: Any = None,
+        arq_redis: Any = None,
         max_attempts: int = 5,
         base_backoff_seconds: float = 1.0,
         max_backoff_seconds: float = 300.0,
     ) -> None:
         self.session = session
         self.es_adapter = es_adapter if es_adapter is not None else ElasticsearchMailAdapter()
+        self.arq_redis = arq_redis
         self.max_attempts = max_attempts
         self.base_backoff_seconds = base_backoff_seconds
         self.max_backoff_seconds = max_backoff_seconds
@@ -185,6 +187,16 @@ class OutboxWorker:
                     lease_version,
                     new_status=OutboxEventStatus.DONE,
                 )
+                if cas_ok and self.arq_redis is not None and not message.is_deleted:  # noqa: SIM102
+                    semantic_text = f"Subject: {message.subject or ''}\nFrom: {message.sender or ''}\n\n{message.body_preview or ''}"
+                    semantic_text = semantic_text[:2000]
+                    await self.arq_redis.enqueue_job(
+                        "embed_message_job",
+                        str(message.id),
+                        str(message.tenant_id),
+                        message.version,
+                        semantic_text,
+                    )
                 if self.session.in_transaction():
                     await self.session.commit()
                 return cas_ok

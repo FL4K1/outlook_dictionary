@@ -99,6 +99,14 @@ async def seeded_es(es_client: httpx.AsyncClient) -> AsyncGenerator[str, None]:
                 "has_attachments": {"type": "boolean"},
                 "is_deleted": {"type": "boolean"},
                 "received_date_time": {"type": "date"},
+                "semantic_vector": {
+                    "type": "dense_vector",
+                    "dims": 1536,
+                    "index": True,
+                    "similarity": "cosine",
+                },
+                "embedding_model_id": {"type": "keyword"},
+                "embedding_version": {"type": "long"},
             }
         }
     }

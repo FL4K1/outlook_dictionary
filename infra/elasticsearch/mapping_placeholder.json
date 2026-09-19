@@ -35,6 +35,18 @@
       },
       "date": {
         "type": "date"
+      },
+      "semantic_vector": {
+        "type": "dense_vector",
+        "dims": 1536,
+        "index": true,
+        "similarity": "cosine"
+      },
+      "embedding_model_id": {
+        "type": "keyword"
+      },
+      "embedding_version": {
+        "type": "long"
       }
     }
   }

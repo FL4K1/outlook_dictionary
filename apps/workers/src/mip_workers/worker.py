@@ -78,8 +78,51 @@ async def process_outbox_event_job(ctx: dict[str, Any], event_id_str: str) -> bo
     worker_id = uuid.uuid4()
 
     async with sessionmaker() as session:
-        worker = OutboxWorker(session, es_adapter=es_adapter)
+        worker = OutboxWorker(session, es_adapter=es_adapter, arq_redis=ctx.get("redis"))
         return await worker.process_outbox_event(event_id, worker_id)
+
+
+async def embed_message_job(
+    ctx: dict[str, Any],
+    document_id: str,
+    tenant_id: str,
+    version: int,
+    semantic_text: str,
+) -> bool:
+    """ARQ job to generate embeddings and execute partial Elasticsearch update."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    es_adapter = ctx.get("es_adapter")
+    if not es_adapter:
+        logger.error("No es_adapter configured for embed_message_job.")
+        return False
+
+    try:
+        # Dynamically import to avoid top-level cyclic dependency if any
+        from mip_ai.embeddings.mock import DeterministicMockEmbeddingProvider
+
+        provider = DeterministicMockEmbeddingProvider()
+
+        result = await provider.embed([semantic_text])
+        if not result.vectors:
+            return False
+
+        vector = result.vectors[0]
+        index_name = f"mail_messages_{tenant_id}"
+
+        success = await es_adapter.update_embeddings(
+            index_name=index_name,
+            document_id=document_id,
+            semantic_vector=vector,
+            embedding_model_id=provider.model_id,
+            version=version,
+        )
+        return bool(success)
+    except Exception as e:
+        logger.error("Failed to embed message %s: %s", document_id, e)
+        raise
 
 
 async def outbox_polling_cron(ctx: dict[str, Any]) -> int:
@@ -111,7 +154,7 @@ async def outbox_polling_cron(ctx: dict[str, Any]) -> int:
 class WorkerSettings:
     """ARQ Worker configuration settings."""
 
-    functions: ClassVar = [process_outbox_event_job, outbox_polling_cron]
+    functions: ClassVar = [process_outbox_event_job, outbox_polling_cron, embed_message_job]
     cron_jobs: ClassVar = [cron(outbox_polling_cron, second={0, 10, 20, 30, 40, 50})]
     on_startup = startup
     on_shutdown = shutdown
