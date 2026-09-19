@@ -35,9 +35,14 @@ async def startup(ctx: dict[str, Any]) -> None:
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     es_adapter = ElasticsearchMailAdapter()
 
+    # Dynamically select based on configuration in production, mocking for now
+    from mip_ai.embeddings.mock import DeterministicMockEmbeddingProvider
+    provider = DeterministicMockEmbeddingProvider()
+
     ctx["db_engine"] = engine
     ctx["sessionmaker"] = sessionmaker
     ctx["es_adapter"] = es_adapter
+    ctx["embedding_provider"] = provider
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
@@ -99,12 +104,12 @@ async def embed_message_job(
         logger.error("No es_adapter configured for embed_message_job.")
         return False
 
+    provider = ctx.get("embedding_provider")
+    if not provider:
+        logger.error("No embedding_provider configured for embed_message_job.")
+        return False
+
     try:
-        # Dynamically import to avoid top-level cyclic dependency if any
-        from mip_ai.embeddings.mock import DeterministicMockEmbeddingProvider
-
-        provider = DeterministicMockEmbeddingProvider()
-
         result = await provider.embed([semantic_text])
         if not result.vectors:
             return False

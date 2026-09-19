@@ -33,7 +33,12 @@ def get_search_service(settings: Settings = Depends(get_settings)) -> SearchServ
     production optimisation in a future PR.
     """
     adapter = ElasticsearchSearchAdapter(base_url=settings.elasticsearch_url)
-    return SearchService(es_adapter=adapter)
+    
+    # Temporarily injecting the deterministic mock for integration testing
+    from mip_ai.embeddings.mock import DeterministicMockEmbeddingProvider
+    provider = DeterministicMockEmbeddingProvider()
+    
+    return SearchService(es_adapter=adapter, embedding_provider=provider)
 
 
 @router.post(

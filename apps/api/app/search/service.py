@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class SearchService:
     """Service to handle Mail Search operations against Elasticsearch."""
 
-    def __init__(self, es_adapter: ElasticsearchSearchAdapter) -> None:
+    def __init__(self, es_adapter: ElasticsearchSearchAdapter, embedding_provider: Any = None) -> None:
         self.es_adapter = es_adapter
+        self.embedding_provider = embedding_provider
 
     async def search_mail(self, tenant_id: str, request: MailSearchRequest) -> MailSearchResponse:
         """Constructs an Elasticsearch DSL query and retrieves the results.
@@ -64,17 +65,17 @@ class SearchService:
             and request.query
             and request.query.strip()
         ):
-            try:
-                from mip_ai.embeddings.mock import DeterministicMockEmbeddingProvider
-
-                provider = DeterministicMockEmbeddingProvider()
-                result = await provider.embed([request.query.strip()])
-                if result.vectors:
-                    query_vector = result.vectors[0]
-            except Exception as e:
-                logger.warning(
-                    "Query embedding failed, falling back to lexical if allowable: %s", e
-                )
+            if not self.embedding_provider:
+                logger.warning("No embedding provider configured, falling back to lexical search")
+            else:
+                try:
+                    result = await self.embedding_provider.embed([request.query.strip()])
+                    if result.vectors:
+                        query_vector = result.vectors[0]
+                except Exception as e:
+                    logger.warning(
+                        "Query embedding failed, falling back to lexical if allowable: %s", e
+                    )
 
         query: dict[str, Any] = {"bool": {"filter": must_filters}}
 
