@@ -17,12 +17,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get_embedding_provider(provider_name: str | None = None) -> EmbeddingProvider | None:
-    """Resolve an embedding provider by name or environment variable EMBEDDING_PROVIDER.
+def get_embedding_provider(
+    provider_name: str | None = None,
+) -> EmbeddingProvider | None:
+    """Resolve an embedding provider by name or ``EMBEDDING_PROVIDER`` env var.
 
     Supported values:
-    - 'mock': DeterministicMockEmbeddingProvider for local testing & development
-    - 'none' / None: Disabled (lexical search fallback)
+
+    - ``mock`` / ``test``: DeterministicMockEmbeddingProvider
+    - ``openai``: OpenAIEmbeddingProvider (requires ``OPENAI_API_KEY``)
+    - ``none`` / ``disabled``: Returns None (lexical search only)
     """
     if provider_name is None:
         provider_name = os.getenv("EMBEDDING_PROVIDER", "mock")
@@ -31,22 +35,24 @@ def get_embedding_provider(provider_name: str | None = None) -> EmbeddingProvide
 
     if provider_name in ("mock", "test", "testing"):
         return DeterministicMockEmbeddingProvider()
-    elif provider_name in ("none", "disabled", ""):
+
+    if provider_name in ("none", "disabled", ""):
         return None
-    elif provider_name == "openai":
-        # Placeholder for OpenAI text-embedding-3-small provider when API credentials are provided
-        api_key = os.getenv("OPENAI_API_KEY")
+
+    if provider_name == "openai":
+        api_key = os.getenv("OPENAI_API_KEY", "")
         if not api_key:
-            logger.warning(
-                "EMBEDDING_PROVIDER=openai specified but OPENAI_API_KEY missing. Fallback to None."
-            )
-            return None
-        raise NotImplementedError(
-            "OpenAI embedding provider client requires explicit external API key configuration."
+            raise ValueError("EMBEDDING_PROVIDER=openai but OPENAI_API_KEY missing.")
+
+        from mip_ai.embeddings.openai import OpenAIEmbeddingProvider
+
+        return OpenAIEmbeddingProvider(
+            api_key=api_key,
+            model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
+            dimensions=int(os.getenv("EMBEDDING_DIMENSION", "1536")),
+            base_url=os.getenv("EMBEDDING_BASE_URL", "https://api.openai.com/v1"),
+            timeout_seconds=float(os.getenv("EMBEDDING_TIMEOUT", "30")),
+            max_batch_size=int(os.getenv("EMBEDDING_BATCH_SIZE", "20")),
         )
-    else:
-        logger.warning(
-            "Unknown EMBEDDING_PROVIDER '%s', defaulting to DeterministicMockEmbeddingProvider",
-            provider_name,
-        )
-        return DeterministicMockEmbeddingProvider()
+
+    raise ValueError(f"Unknown EMBEDDING_PROVIDER '{provider_name}'")

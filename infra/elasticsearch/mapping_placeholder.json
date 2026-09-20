@@ -47,6 +47,9 @@
       },
       "embedding_version": {
         "type": "long"
+      },
+      "embedding_dimensions": {
+        "type": "integer"
       }
     }
   }

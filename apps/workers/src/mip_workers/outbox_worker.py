@@ -188,10 +188,20 @@ class OutboxWorker:
                     new_status=OutboxEventStatus.DONE,
                 )
                 if cas_ok and self.arq_redis is not None and not message.is_deleted:
-                    subj = message.subject or ""
-                    sndr = message.sender or ""
-                    body = message.body_preview or ""
-                    semantic_text = f"Subject: {subj}\nFrom: {sndr}\n\n{body}"[:2000]
+                    from mip_ai.embeddings.text import build_semantic_text
+
+                    # sender is a JSON column (dict), extract email for text
+                    sender_str = ""
+                    if isinstance(message.sender, dict):
+                        sender_str = str(message.sender.get("emailAddress", {}).get("address", ""))
+                    elif isinstance(message.sender, str):
+                        sender_str = message.sender
+
+                    semantic_text = build_semantic_text(
+                        subject=message.subject or "",
+                        sender=sender_str,
+                        body=message.body_preview or "",
+                    )
                     await self.arq_redis.enqueue_job(
                         "embed_message_job",
                         str(message.id),

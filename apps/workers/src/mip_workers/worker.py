@@ -17,6 +17,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from mip_models.mail import OutboxEvent, OutboxEventStatus
+from mip_workers.backfill import backfill_tenant_embeddings_job
 from mip_workers.es_adapter import ElasticsearchMailAdapter
 from mip_workers.outbox_worker import OutboxWorker
 
@@ -97,6 +98,15 @@ async def embed_message_job(
     """ARQ job to generate embeddings and execute partial Elasticsearch update."""
     import logging
 
+    from mip_ai.embeddings.errors import (
+        EmbeddingPermanentError,
+        EmbeddingTransientError,
+    )
+    from mip_workers.es_adapter import (
+        PermanentElasticsearchError,
+        RetryableElasticsearchError,
+    )
+
     logger = logging.getLogger(__name__)
 
     es_adapter = ctx.get("es_adapter")
@@ -125,8 +135,25 @@ async def embed_message_job(
             version=version,
         )
         return bool(success)
-    except Exception as e:
-        logger.error("Failed to embed message %s: %s", document_id, e)
+
+    except EmbeddingTransientError as exc:
+        logger.warning("Transient embedding error for %s: %s", document_id, exc)
+        raise  # ARQ will retry
+
+    except EmbeddingPermanentError as exc:
+        logger.error("Permanent embedding error for %s: %s", document_id, exc)
+        return False  # dead-letter
+
+    except RetryableElasticsearchError as exc:
+        logger.warning("Transient ES error for %s: %s", document_id, exc)
+        raise  # ARQ will retry
+
+    except PermanentElasticsearchError as exc:
+        logger.error("Permanent ES error for %s: %s", document_id, exc)
+        return False  # dead-letter
+
+    except Exception as exc:
+        logger.error("Unexpected error embedding %s: %s", document_id, exc)
         raise
 
 
@@ -159,7 +186,12 @@ async def outbox_polling_cron(ctx: dict[str, Any]) -> int:
 class WorkerSettings:
     """ARQ Worker configuration settings."""
 
-    functions: ClassVar = [process_outbox_event_job, outbox_polling_cron, embed_message_job]
+    functions: ClassVar = [
+        process_outbox_event_job,
+        outbox_polling_cron,
+        embed_message_job,
+        backfill_tenant_embeddings_job,
+    ]
     cron_jobs: ClassVar = [cron(outbox_polling_cron, second={0, 10, 20, 30, 40, 50})]
     on_startup = startup
     on_shutdown = shutdown

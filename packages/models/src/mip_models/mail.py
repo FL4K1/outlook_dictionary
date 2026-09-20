@@ -701,3 +701,120 @@ class OutboxEvent(Base, IdentityMixin):
 
     def __repr__(self) -> str:
         return f"<OutboxEvent(id={self.id}, type='{self.event_type}', status='{self.status}')>"
+
+
+class BackfillStatus(StrEnum):
+    """Supported values for EmbeddingBackfillProgress.status."""
+
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class EmbeddingBackfillProgress(Base, IdentityMixin):
+    """Durable checkpoint for resumable embedding backfill per tenant."""
+
+    __tablename__ = "embedding_backfill_progress"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "embedding_model",
+            name="uq_embedding_backfill_tenant_model",
+        ),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default="PENDING",
+        default=BackfillStatus.PENDING,
+    )
+
+    last_cursor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
+    total_processed: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+        default=0,
+    )
+
+    total_embedded: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+        default=0,
+    )
+
+    total_skipped: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+        default=0,
+    )
+
+    total_failed: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default="0",
+        default=0,
+    )
+
+    embedding_model: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    embedding_dims: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<EmbeddingBackfillProgress(id={self.id}, "
+            f"tenant={self.tenant_id}, status='{self.status}')>"
+        )

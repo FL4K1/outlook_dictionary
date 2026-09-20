@@ -179,6 +179,7 @@ class ElasticsearchMailAdapter:
                         ctx._source.semantic_vector = params.semantic_vector;
                         ctx._source.embedding_model_id = params.embedding_model_id;
                         ctx._source.embedding_version = params.version;
+                        ctx._source.embedding_dimensions = params.embedding_dimensions;
                     }
                 """,
                 "lang": "painless",
@@ -186,6 +187,7 @@ class ElasticsearchMailAdapter:
                     "semantic_vector": semantic_vector,
                     "embedding_model_id": embedding_model_id,
                     "version": version,
+                    "embedding_dimensions": len(semantic_vector),
                 },
             }
         }

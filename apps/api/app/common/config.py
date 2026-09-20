@@ -69,6 +69,15 @@ class Settings(BaseSettings):
     elasticsearch_port: int = 9200
     elasticsearch_scheme: str = "http"
 
+    # --- Embedding ---
+    embedding_provider: str = "mock"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimension: int = 1536
+    embedding_timeout: int = 30
+    embedding_batch_size: int = 20
+    embedding_base_url: str = "https://api.openai.com/v1"
+    openai_api_key: str = ""
+
     # --- Object Storage (MinIO / S3) ---
     object_storage_endpoint: str = "http://localhost:9000"
     object_storage_access_key: str = "minioadmin"
