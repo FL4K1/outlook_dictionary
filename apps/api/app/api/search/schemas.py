@@ -38,6 +38,16 @@ class MailSearchRequest(BaseModel):
         default=None,
         description="Filter messages received on or after this ISO8601 timestamp.",
     )
+    from_sender_emails: list[str] | None = Field(
+        default=None,
+        description="Filter by exact sender email addresses. Max 10.",
+        max_length=10,
+    )
+    participant_emails: list[str] | None = Field(
+        default=None,
+        description="Filter by generic participant email addresses. Max 10.",
+        max_length=10,
+    )
     to_date: datetime.datetime | None = Field(
         default=None,
         description="Filter messages received on or before this ISO8601 timestamp.",
@@ -91,3 +101,29 @@ class MailSearchResponse(BaseModel):
     )
 
     model_config = ConfigDict(extra="ignore")
+
+
+class NLMailSearchRequest(BaseModel):
+    """Request payload for natural language mail search."""
+
+    natural_query: str = Field(
+        ...,
+        description="Natural language mail search query.",
+        min_length=1,
+        max_length=500,
+    )
+    user_timezone: str = Field(
+        default="UTC",
+        description="User IANA timezone name (e.g. America/Los_Angeles or UTC).",
+    )
+    page_size: int = Field(
+        default=25,
+        ge=1,
+        le=100,
+        description="Number of results to return per page.",
+    )
+    search_after: list[Any] | None = Field(
+        default=None,
+        description="Opaque pagination cursor from a previous response.",
+        max_length=5,
+    )

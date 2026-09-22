@@ -94,6 +94,14 @@ async def seeded_es(es_client: httpx.AsyncClient) -> AsyncGenerator[str, None]:
                 "subject": {"type": "text"},
                 "body": {"type": "text"},
                 "sender": {"type": "text"},
+                "sender_email": {"type": "keyword"},
+                "participants": {
+                    "properties": {
+                        "name": {"type": "text"},
+                        "email": {"type": "keyword"},
+                        "role": {"type": "keyword"},
+                    }
+                },
                 "folder_ids": {"type": "keyword"},
                 "is_read": {"type": "boolean"},
                 "has_attachments": {"type": "boolean"},

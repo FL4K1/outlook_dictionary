@@ -241,3 +241,41 @@ class ElasticsearchMailAdapter:
         finally:
             if own_client:
                 await client.aclose()
+
+    async def backfill_sender_email(self, tenant_id: str) -> dict[str, Any]:
+        """Execute Painless _update_by_query to populate missing sender_email from sender.email."""
+        index_name = f"mail_messages_{tenant_id}"
+        url = f"{self.base_url}/{index_name}/_update_by_query?conflicts=proceed"
+        body = {
+            "script": {
+                "source": (
+                    "if (ctx._source.sender != null && ctx._source.sender instanceof Map && "
+                    "ctx._source.sender.containsKey('email')) { "
+                    "ctx._source.sender_email = ctx._source.sender.email; }"
+                ),
+                "lang": "painless",
+            },
+            "query": {"bool": {"must_not": [{"exists": {"field": "sender_email"}}]}},
+        }
+        own_client = False
+        client = self._client
+        if client is None:
+            client = httpx.AsyncClient()
+            own_client = True
+
+        try:
+            response = await client.post(url, json=body)
+            if response.status_code == 200:
+                res_dict: dict[str, Any] = response.json()
+                return res_dict
+            if response.status_code == 404:
+                return {"updated": 0, "status": "index_not_found"}
+            status = response.status_code
+            msg = f"Backfill sender_email failed with status {status}: {response.text[:200]}"
+            raise PermanentElasticsearchError(
+                msg,
+                status_code=response.status_code,
+            )
+        finally:
+            if own_client:
+                await client.aclose()

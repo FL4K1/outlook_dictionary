@@ -33,6 +33,13 @@
       "sender_email": {
         "type": "keyword"
       },
+      "participants": {
+        "properties": {
+          "name": { "type": "text" },
+          "email": { "type": "keyword" },
+          "role": { "type": "keyword" }
+        }
+      },
       "date": {
         "type": "date"
       },

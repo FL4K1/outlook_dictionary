@@ -12,8 +12,10 @@ from __future__ import annotations
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from mip_ai.query_understanding.llm_config import LLMConfig, LLMProvider
 
 
 class Environment(StrEnum):
@@ -77,6 +79,14 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 20
     embedding_base_url: str = "https://api.openai.com/v1"
     openai_api_key: str = ""
+
+    # --- Query Understanding LLM ---
+    llm_provider: LLMProvider = LLMProvider.MOCK
+    llm_model: str = "deterministic"
+    llm_api_key: SecretStr | None = None
+    llm_base_url: str | None = None
+    llm_timeout_seconds: float = 30.0
+    llm_require_structured_output: bool = True
 
     # --- Object Storage (MinIO / S3) ---
     object_storage_endpoint: str = "http://localhost:9000"
@@ -216,6 +226,18 @@ class Settings(BaseSettings):
     def is_testing(self) -> bool:
         """True if running in test environment."""
         return self.app_env == Environment.TESTING
+
+    @property
+    def llm(self) -> LLMConfig:
+        """Get the composed deployment-level LLMConfig."""
+        return LLMConfig(
+            provider=self.llm_provider,
+            model=self.llm_model,
+            api_key=self.llm_api_key,
+            base_url=self.llm_base_url,
+            timeout_seconds=self.llm_timeout_seconds,
+            require_structured_output=self.llm_require_structured_output,
+        )
 
 
 @lru_cache(maxsize=1)

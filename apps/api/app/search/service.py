@@ -47,6 +47,12 @@ class SearchService:
         if request.folder_ids:
             must_filters.append({"terms": {"folder_ids": request.folder_ids}})
 
+        if request.from_sender_emails:
+            must_filters.append({"terms": {"sender_email": request.from_sender_emails}})
+
+        if request.participant_emails:
+            must_filters.append({"terms": {"participants.email": request.participant_emails}})
+
         if request.is_read is not None:
             must_filters.append({"term": {"is_read": request.is_read}})
 

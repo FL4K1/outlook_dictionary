@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.search.schemas import MailSearchRequest, MailSearchResponse
+from app.api.search.schemas import (
+    MailSearchRequest,
+    MailSearchResponse,
+    NLMailSearchRequest,
+)
 from app.auth.dependencies import require_tenant_membership
 from app.common.config import Settings, get_settings
 from app.search.elasticsearch_search import (
@@ -15,7 +19,21 @@ from app.search.elasticsearch_search import (
     SearchInvalidQueryError,
     SearchServiceUnavailableError,
 )
+from app.search.nl_service import (
+    EntityAmbiguityError,
+    EntityResolutionError,
+    InvalidTimezoneError,
+    NaturalLanguageSearchService,
+    UnsupportedQueryCapabilityError,
+)
 from app.search.service import SearchService
+from mip_ai.query_understanding import (
+    QueryUnderstandingConfigurationError,
+    QueryUnderstandingMalformedOutputError,
+    QueryUnderstandingPermanentError,
+    QueryUnderstandingRateLimitError,
+    QueryUnderstandingTransientError,
+)
 
 if TYPE_CHECKING:
     from app.auth.context import AuthenticationContext
@@ -39,6 +57,17 @@ def get_search_service(settings: Settings = Depends(get_settings)) -> SearchServ
     provider = get_embedding_provider()
 
     return SearchService(es_adapter=adapter, embedding_provider=provider)
+
+
+def get_natural_language_search_service(
+    search_service: SearchService = Depends(get_search_service),
+    settings: Settings = Depends(get_settings),
+) -> NaturalLanguageSearchService:
+    """Dependency injecting NaturalLanguageSearchService."""
+    from mip_ai.query_understanding import get_query_understanding_provider
+
+    provider = get_query_understanding_provider(config=settings.llm)
+    return NaturalLanguageSearchService(provider=provider, search_service=search_service)
 
 
 @router.post(
@@ -78,6 +107,66 @@ async def search_mail(
         ) from exc
     except Exception as exc:
         logger.exception("Unexpected error during search_mail")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred.",
+        ) from exc
+
+
+@router.post(
+    "/mail/natural-language",
+    response_model=MailSearchResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Natural Language Mail Search",
+    description="Translate natural language queries into structured search requests executed against tenant messages.",  # noqa: E501
+)
+async def search_mail_natural_language(
+    body: NLMailSearchRequest,
+    context: AuthenticationContext = Depends(require_tenant_membership()),
+    nl_service: NaturalLanguageSearchService = Depends(get_natural_language_search_service),
+) -> MailSearchResponse:
+    """Execute natural language search bounded securely to authenticated tenant."""
+    try:
+        return await nl_service.search_natural_language(
+            tenant_id=context.tenant_id,
+            natural_query=body.natural_query,
+            user_timezone=body.user_timezone,
+            page_size=body.page_size,
+            search_after=body.search_after,
+        )
+    except (
+        UnsupportedQueryCapabilityError,
+        EntityAmbiguityError,
+        EntityResolutionError,
+        InvalidTimezoneError,
+        SearchInvalidQueryError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except (
+        QueryUnderstandingMalformedOutputError,
+        QueryUnderstandingRateLimitError,
+        QueryUnderstandingTransientError,
+        QueryUnderstandingPermanentError,
+    ) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Query understanding service failed: {exc}",
+        ) from exc
+    except QueryUnderstandingConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Query understanding service misconfigured: {exc}",
+        ) from exc
+    except SearchServiceUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during natural language mail search")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred.",

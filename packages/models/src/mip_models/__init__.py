@@ -39,6 +39,7 @@ from mip_models.mail import (
     ProviderCredential,
 )
 from mip_models.organization import Organization
+from mip_models.search import DateRangeIntent, MailQueryPlan, ParticipantHint
 from mip_models.tenant import Tenant
 from mip_models.user import Identity, Membership, User
 
@@ -47,6 +48,7 @@ __all__ = [
     "AsyncSessionFactory",
     "AuditLog",
     "Base",
+    "DateRangeIntent",
     "DeviceSession",
     "EntraTenantMapping",
     "Identity",
@@ -56,6 +58,7 @@ __all__ = [
     "MailMessage",
     "MailMessageFolder",
     "MailMessageParticipant",
+    "MailQueryPlan",
     "MailSyncState",
     "MailSyncStateValue",
     "Membership",
@@ -63,6 +66,7 @@ __all__ = [
     "Organization",
     "OutboxEvent",
     "OutboxEventStatus",
+    "ParticipantHint",
     "ParticipantRole",
     "Permission",
     "ProviderCredential",

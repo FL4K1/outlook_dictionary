@@ -149,6 +149,9 @@ class OutboxWorker:
             "body": message.body,
             "body_preview": message.body_preview,
             "sender": message.sender,
+            "sender_email": (
+                message.sender.get("email") if isinstance(message.sender, dict) else None
+            ),
             "participants": [
                 {
                     "name": p.name,

@@ -82,6 +82,7 @@ async def seeded_es_hybrid(es_client: httpx.AsyncClient) -> AsyncGenerator[str, 
                 "subject": {"type": "text"},
                 "body": {"type": "text"},
                 "sender": {"type": "text"},
+                "sender_email": {"type": "keyword"},
                 "received_date_time": {"type": "date"},
                 "semantic_vector": {
                     "type": "dense_vector",

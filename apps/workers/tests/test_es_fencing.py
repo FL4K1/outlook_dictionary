@@ -49,6 +49,7 @@ async def test_es_version_fencing(
                 "id": {"type": "keyword"},
                 "tenant_id": {"type": "keyword"},
                 "subject": {"type": "text"},
+                "sender_email": {"type": "keyword"},
                 "body": {"type": "text"},
                 "semantic_vector": {
                     "type": "dense_vector",
