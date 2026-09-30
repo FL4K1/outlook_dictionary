@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
-import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-import httpx
-import litellm
 import pydantic
 
+from mip_ai.gateway.core import BaseLiteLLMGateway
+from mip_ai.gateway.errors import (
+    GatewayConfigurationError,
+    GatewayPermanentError,
+    GatewayRateLimitError,
+    GatewayTransientError,
+)
 from mip_ai.query_understanding.base import (
     QueryUnderstandingProvider,
     QueryUnderstandingResult,
@@ -24,7 +28,7 @@ from mip_ai.query_understanding.errors import (
 from mip_models.search import MailQueryPlan
 
 if TYPE_CHECKING:
-    from mip_ai.query_understanding.llm_config import LLMConfig
+    from mip_ai.gateway.llm_config import LLMConfig
 
 logger = logging.getLogger(__name__)
 
@@ -72,38 +76,17 @@ or "mixed". Otherwise default to "keyword".
 
 
 class GatewayQueryUnderstandingProvider(QueryUnderstandingProvider):
-    """Multi-provider query understanding via LiteLLM."""
+    """Multi-provider query understanding via shared LiteLLM gateway."""
 
     def __init__(self, config: LLMConfig) -> None:
-        """Initialize the gateway provider with a given configuration."""
+        """Initialize the domain provider with the shared infrastructure gateway."""
         self.config = config
-        self._model = self._build_litellm_model_string(config)
+        self._gateway = BaseLiteLLMGateway(config)
 
     @property
     def model_id(self) -> str:
         """Return the qualified model string."""
-        return self._model
-
-    def _build_litellm_model_string(self, config: LLMConfig) -> str:
-        """Deterministically qualify the provider and model for LiteLLM.
-
-        Prevents double-prefixing (e.g. openrouter/openrouter/...).
-        """
-        provider_name = config.provider.value.lower()
-        model_name = config.model
-
-        # OpenAI doesn't explicitly need a provider prefix, but LiteLLM accepts it.
-        # However, to be perfectly canonical with standard LiteLLM:
-        if provider_name == "openai":
-            if model_name.startswith("openai/"):
-                return model_name
-            return model_name  # Usually just pure model name like gpt-4o-mini
-
-        # For other cloud providers and ollama, we prefix explicitly.
-        prefix = f"{provider_name}/"
-        if model_name.startswith(prefix):
-            return model_name
-        return f"{prefix}{model_name}"
+        return self._gateway.model_id
 
     async def understand_query(self, query: str) -> QueryUnderstandingResult:
         """Parse natural language query into a typed MailQueryPlan via LiteLLM."""
@@ -115,91 +98,26 @@ class GatewayQueryUnderstandingProvider(QueryUnderstandingProvider):
             {"role": "user", "content": query.strip()},
         ]
 
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            "messages": messages,
-            "temperature": 0.0,
-            "timeout": self.config.timeout_seconds,
+        schema = MailQueryPlan.model_json_schema()
+        json_schema = {
+            "name": "mail_query_plan",
+            "strict": True,
+            "schema": schema,
         }
 
-        # Inject base_url safely
-        if self.config.base_url:
-            kwargs["base_url"] = self.config.base_url
-            if self.config.provider == "ollama" and not self.config.api_key:
-                # LiteLLM sometimes requires an API key value for Ollama, so we provide one.
-                kwargs["api_key"] = "ollama"
-
-        # Inject secrets safely natively, bypassing os.environ
-        if self.config.api_key:
-            kwargs["api_key"] = self.config.api_key.get_secret_value()
-
-        # Capability assertion: explicit fail closed
-        if self.config.require_structured_output:
-            supported_params = litellm.get_supported_openai_params(model=self._model) or []
-            if "response_format" not in supported_params and self.config.provider != "ollama":
-                msg = (
-                    f"Model {self._model} does not reliably support "
-                    "structured output ('response_format'). "
-                    "Failing closed due to require_structured_output=True."
-                )
-                raise QueryUnderstandingConfigurationError(msg)
-
-            # JSON Schema
-            schema = MailQueryPlan.model_json_schema()
-            kwargs["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "mail_query_plan",
-                    "strict": True,
-                    "schema": schema,
-                },
-            }
-
-        start_time = time.monotonic()
         try:
-            # Drop params allows ignoring unused standard params, but
-            # we don't want to silently drop `response_format`.
-            response = await litellm.acompletion(**kwargs, drop_params=False)
-        except litellm.exceptions.RateLimitError as e:
-            raise QueryUnderstandingRateLimitError(f"LiteLLM rate limit: {e}") from e
-        except (
-            litellm.exceptions.Timeout,
-            litellm.exceptions.ServiceUnavailableError,
-            httpx.TimeoutException,
-        ) as e:
-            raise QueryUnderstandingTransientError(f"Gateway transient failure: {e}") from e
-        except litellm.exceptions.AuthenticationError as e:
-            raise QueryUnderstandingConfigurationError(
-                f"Gateway authentication failure: {e}"
-            ) from e
-        except litellm.exceptions.UnsupportedParamsError as e:
-            # Catches if JSON schema is rejected by LiteLLM explicitly
-            raise QueryUnderstandingConfigurationError(
-                f"Unsupported structured output param: {e}"
-            ) from e
-        except litellm.exceptions.APIError as e:
-            if getattr(e, "status_code", 500) >= 500:
-                raise QueryUnderstandingTransientError(f"Gateway transient API failure: {e}") from e
-            raise QueryUnderstandingPermanentError(f"Gateway permanent API failure: {e}") from e
-        except (
-            litellm.exceptions.ContextWindowExceededError,
-            litellm.exceptions.BadRequestError,
-        ) as e:
-            raise QueryUnderstandingPermanentError(f"Bad provider request: {e}") from e
-        except Exception as e:
-            logger.error("Unknown LiteLLM execution failure: %s", type(e).__name__)
-            # Safest generic transient
-            raise QueryUnderstandingTransientError("Unknown gateway transient error.") from e
-
-        latency_ms = (time.monotonic() - start_time) * 1000.0
-
-        choices = response.get("choices", [])
-        if not choices:
-            raise QueryUnderstandingMalformedOutputError("Gateway returned no choices.")
-
-        content = choices[0].get("message", {}).get("content", "")
-        if not content:
-            raise QueryUnderstandingMalformedOutputError("Gateway returned empty content.")
+            content, latency_ms = await self._gateway.execute_structured_request(
+                messages=messages,
+                json_schema=json_schema,
+            )
+        except GatewayRateLimitError as e:
+            raise QueryUnderstandingRateLimitError(str(e)) from e
+        except GatewayTransientError as e:
+            raise QueryUnderstandingTransientError(str(e)) from e
+        except GatewayConfigurationError as e:
+            raise QueryUnderstandingConfigurationError(str(e)) from e
+        except GatewayPermanentError as e:
+            raise QueryUnderstandingPermanentError(str(e)) from e
 
         try:
             # Pydantic is authoritative boundary
@@ -213,7 +131,7 @@ class GatewayQueryUnderstandingProvider(QueryUnderstandingProvider):
 
         return QueryUnderstandingResult(
             query_plan=query_plan,
-            model_id=self._model,
+            model_id=self.model_id,
             latency_ms=latency_ms,
             provider=self.config.provider.value,
             raw_response=content,

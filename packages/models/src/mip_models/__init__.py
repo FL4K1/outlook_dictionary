@@ -40,6 +40,7 @@ from mip_models.mail import (
 )
 from mip_models.organization import Organization
 from mip_models.search import DateRangeIntent, MailQueryPlan, ParticipantHint
+from mip_models.synthesis import SearchSynthesis, SynthesisCitation
 from mip_models.tenant import Tenant
 from mip_models.user import Identity, Membership, User
 
@@ -73,8 +74,10 @@ __all__ = [
     "RefreshTokenFamily",
     "Role",
     "RolePermission",
+    "SearchSynthesis",
     "ServiceAccount",
     "Session",
+    "SynthesisCitation",
     "Tenant",
     "TenantMixin",
     "TimestampMixin",

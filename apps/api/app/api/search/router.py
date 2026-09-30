@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.search.schemas import (
     MailSearchRequest,
     MailSearchResponse,
+    NaturalLanguageSearchResponse,
     NLMailSearchRequest,
 )
 from app.auth.dependencies import require_tenant_membership
@@ -65,9 +66,13 @@ def get_natural_language_search_service(
 ) -> NaturalLanguageSearchService:
     """Dependency injecting NaturalLanguageSearchService."""
     from mip_ai.query_understanding import get_query_understanding_provider
+    from mip_ai.synthesis import GatewaySearchSynthesisProvider
 
     provider = get_query_understanding_provider(config=settings.llm)
-    return NaturalLanguageSearchService(provider=provider, search_service=search_service)
+    synthesis_provider = GatewaySearchSynthesisProvider(config=settings.llm)
+    return NaturalLanguageSearchService(
+        provider=provider, search_service=search_service, synthesis_provider=synthesis_provider
+    )
 
 
 @router.post(
@@ -115,7 +120,7 @@ async def search_mail(
 
 @router.post(
     "/mail/natural-language",
-    response_model=MailSearchResponse,
+    response_model=NaturalLanguageSearchResponse,
     status_code=status.HTTP_200_OK,
     summary="Natural Language Mail Search",
     description="Translate natural language queries into structured search requests executed against tenant messages.",  # noqa: E501
@@ -124,7 +129,7 @@ async def search_mail_natural_language(
     body: NLMailSearchRequest,
     context: AuthenticationContext = Depends(require_tenant_membership()),
     nl_service: NaturalLanguageSearchService = Depends(get_natural_language_search_service),
-) -> MailSearchResponse:
+) -> NaturalLanguageSearchResponse:
     """Execute natural language search bounded securely to authenticated tenant."""
     try:
         return await nl_service.search_natural_language(
@@ -133,6 +138,7 @@ async def search_mail_natural_language(
             user_timezone=body.user_timezone,
             page_size=body.page_size,
             search_after=body.search_after,
+            synthesize=body.synthesize,
         )
     except (
         UnsupportedQueryCapabilityError,

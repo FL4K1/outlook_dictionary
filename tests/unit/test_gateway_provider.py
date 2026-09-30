@@ -20,16 +20,14 @@ from mip_models.search import MailQueryPlan
 
 @pytest.fixture
 def mock_litellm_acompletion():
-    with patch(
-        "mip_ai.query_understanding.gateway.litellm.acompletion", new_callable=AsyncMock
-    ) as m:
+    with patch("mip_ai.gateway.core.litellm.acompletion", new_callable=AsyncMock) as m:
         yield m
 
 
 @pytest.fixture
 def mock_params_check():
     with patch(
-        "mip_ai.query_understanding.gateway.litellm.get_supported_openai_params",
+        "mip_ai.gateway.core.litellm.get_supported_openai_params",
         return_value=["response_format", "tools", "temperature"],
     ) as check:
         yield check
@@ -85,7 +83,7 @@ def test_gateway_model_routing():
 
     for config, expected_model in configs:
         provider = GatewayQueryUnderstandingProvider(config)
-        assert provider._model == expected_model
+        assert provider.model_id == expected_model
 
 
 @pytest.mark.asyncio

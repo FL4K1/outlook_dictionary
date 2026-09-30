@@ -107,7 +107,11 @@ async def test_nl_service_dispatches_to_search_service() -> None:
         )
     )
     mock_search_service = AsyncMock()
-    mock_search_service.search_mail.return_value = {"hits": list[dict[str, str]]()}
+    from app.api.search.schemas import MailSearchResponse
+
+    mock_search_service.search_mail.return_value = MailSearchResponse(
+        items=[], next_page_cursor=None
+    )
 
     service = NaturalLanguageSearchService(
         provider=mock_provider,

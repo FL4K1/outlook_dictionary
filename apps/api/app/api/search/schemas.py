@@ -127,3 +127,17 @@ class NLMailSearchRequest(BaseModel):
         description="Opaque pagination cursor from a previous response.",
         max_length=5,
     )
+    synthesize: bool = Field(
+        default=False,
+        description="If True, synthesizes a generative AI answer alongside the search results.",
+    )
+
+
+class NaturalLanguageSearchResponse(BaseModel):
+    """Response payload for Natural Language Mail Search API."""
+
+    results: MailSearchResponse
+    synthesis: Any | None = Field(
+        default=None,
+        description="Generative answer derived from hits. May be None if synthesis fails.",
+    )

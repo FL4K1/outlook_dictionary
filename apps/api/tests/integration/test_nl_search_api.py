@@ -1,3 +1,4 @@
+import datetime
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -32,22 +33,23 @@ async def test_nl_search_api_endpoint_success(monkeypatch: pytest.MonkeyPatch) -
     app.dependency_overrides[get_auth_context] = mock_auth
 
     mock_search_service = AsyncMock(spec=SearchService)
-    mock_search_service.search_mail.return_value = {
-        "items": [
-            {
-                "id": str(uuid.uuid4()),
-                "mail_account_id": str(uuid.uuid4()),
-                "subject": "Kubernetes Cluster Upgrade",
-                "sender": "Rahul",
-                "participants": [],
-                "received_date_time": "2026-09-20T10:00:00Z",
-                "folder_ids": [],
-                "is_read": False,
-                "has_attachments": True,
-            }
-        ],
-        "next_page_cursor": None,
-    }
+    from app.api.search.schemas import MailSearchResponse, SearchHit
+
+    hit = SearchHit(
+        id=str(uuid.uuid4()),
+        mail_account_id=str(uuid.uuid4()),
+        subject="Kubernetes Cluster Upgrade",
+        sender="Rahul",
+        participants=[],
+        received_date_time=datetime.datetime(2026, 9, 20, 10, 0, 0, tzinfo=datetime.UTC),
+        folder_ids=[],
+        is_read=False,
+        has_attachments=True,
+    )
+    mock_search_service.search_mail.return_value = MailSearchResponse(
+        items=[hit],
+        next_page_cursor=None,
+    )
 
     from app.api.search.router import get_search_service
 
@@ -67,8 +69,9 @@ async def test_nl_search_api_endpoint_success(monkeypatch: pytest.MonkeyPatch) -
 
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert len(data["items"]) == 1
-    assert data["items"][0]["subject"] == "Kubernetes Cluster Upgrade"
+    assert len(data["results"]["items"]) == 1
+    assert data["results"]["items"][0]["subject"] == "Kubernetes Cluster Upgrade"
+    assert data["synthesis"] is None
 
 
 @pytest.mark.asyncio

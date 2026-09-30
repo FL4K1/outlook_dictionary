@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import distinct, select
 
-from app.api.search.schemas import MailSearchRequest, MailSearchResponse
+from app.api.search.schemas import (
+    MailSearchRequest,
+    NaturalLanguageSearchResponse,
+)
 from mip_models.mail import MailAccount, MailFolder, MailMessage, MailMessageParticipant
 
 if TYPE_CHECKING:
@@ -18,6 +21,7 @@ if TYPE_CHECKING:
 
     from app.search.service import SearchService
     from mip_ai.query_understanding.base import QueryUnderstandingProvider
+    from mip_ai.synthesis.base import SearchSynthesisProvider
     from mip_models.search import DateRangeIntent, MailQueryPlan, ParticipantHint
 
 logger = logging.getLogger(__name__)
@@ -162,10 +166,12 @@ class NaturalLanguageSearchService:
         provider: QueryUnderstandingProvider,
         search_service: SearchService,
         time_source: datetime.datetime | None = None,
+        synthesis_provider: SearchSynthesisProvider | None = None,
     ) -> None:
         self.provider = provider
         self.search_service = search_service
         self.time_source = time_source
+        self.synthesis_provider = synthesis_provider
 
     async def search_natural_language(
         self,
@@ -175,8 +181,13 @@ class NaturalLanguageSearchService:
         page_size: int = 25,
         search_after: list[Any] | None = None,
         db_session: AsyncSession | None = None,
-    ) -> MailSearchResponse:
+        synthesize: bool = False,
+    ) -> NaturalLanguageSearchResponse:
         """Parse natural language query, resolve entities, and execute SearchService search."""
+        from mip_ai.synthesis.errors import (
+            SearchSynthesisError,  # Local import to avoid circular ties
+        )
+
         tenant_uuid = uuid.UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
 
         # 1. Call QueryUnderstandingProvider
@@ -270,7 +281,23 @@ class NaturalLanguageSearchService:
         )
 
         # 7. Dispatch to deterministic SearchService
-        return await self.search_service.search_mail(str(tenant_uuid), search_request)
+        mail_results = await self.search_service.search_mail(str(tenant_uuid), search_request)
+
+        # 8. Dispatch to SearchSynthesisProvider if appropriate
+        synthesis = None
+        if synthesize and self.synthesis_provider and mail_results.items:
+            try:
+                synthesis = await self.synthesis_provider.synthesize(
+                    query=natural_query, hits=mail_results.items
+                )
+            except SearchSynthesisError as e:
+                logger.error("Synthesis gracefully degraded due to failure: %s", str(e))
+                # Graceful degradation - proceed without synthesis
+            except Exception as e:
+                logger.error("Unexpected synthesis error: %s", str(e))
+                # Graceful degradation - proceed without synthesis
+
+        return NaturalLanguageSearchResponse(results=mail_results, synthesis=synthesis)
 
     async def _resolve_account(
         self, db_session: AsyncSession | None, tenant_id: uuid.UUID, account_hint: str
