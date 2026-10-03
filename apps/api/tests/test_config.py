@@ -11,7 +11,17 @@ from app.common.config import Settings
 class TestEntraSettings:
     """Tests for Microsoft Entra ID configuration."""
 
-    def test_default_entra_settings(self) -> None:
+    def test_default_entra_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for key in [
+            "ENTRA_CLIENT_ID",
+            "ENTRA_CLIENT_SECRET",
+            "ENTRA_TENANT_ID",
+            "ENTRA_REDIRECT_URI",
+            "ENTRA_JWKS_ENDPOINT",
+            "ENTRA_ISSUER",
+            "ENTRA_AUDIENCE",
+        ]:
+            monkeypatch.delenv(key, raising=False)
         settings = Settings()
         assert settings.entra_client_id == ""
         assert settings.entra_client_secret == ""
@@ -49,7 +59,8 @@ class TestEntraSettings:
 class TestEncryptionSettings:
     """Tests for encryption configuration."""
 
-    def test_default_encryption_dek(self) -> None:
+    def test_default_encryption_dek(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ENCRYPTION_DEK", "")
         settings = Settings()
         assert settings.encryption_dek == ""
 

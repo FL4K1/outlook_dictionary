@@ -88,7 +88,9 @@ class GatewaySearchSynthesisProvider(SearchSynthesisProvider):
                 body = body[: self.MAX_BODY_CHARS] + "..."
 
             sender = getattr(hit, "sender", "Unknown")
-            if isinstance(sender, dict):
+            if hasattr(sender, "email") or hasattr(sender, "name"):
+                sender = getattr(sender, "email", None) or getattr(sender, "name", None) or "Unknown"
+            elif isinstance(sender, dict):
                 sender = sender.get("email") or sender.get("name") or "Unknown"
 
             piece = (

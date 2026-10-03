@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import SecretStr
 
-from app.api.search.schemas import MailSearchResponse, SearchHit
+from app.api.search.schemas import MailSearchResponse, SearchHit, SearchSender
 from app.search.elasticsearch_search import SearchServiceUnavailableError
 from app.search.nl_service import NaturalLanguageSearchService
 from mip_ai.gateway.errors import (
@@ -34,16 +34,23 @@ class MockHit:
     id: str
     subject: str | None
     body: str | None
-    sender: Any | None = "sender@example.com"
+    sender: Any | None = None
+
+    def __post_init__(self) -> None:
+        if self.sender is None or isinstance(self.sender, str):
+            email_val = self.sender if isinstance(self.sender, str) else "sender@example.com"
+            self.sender = {"name": "Sender", "email": email_val}
 
 
 def create_search_hit(
     msg_id: str,
     subject: str = "Subject",
     body: str = "Body content",
-    sender: str = "sender@example.com",
+    sender: SearchSender | dict[str, str] | None = None,
 ) -> SearchHit:
     """Create a SearchHit instance with body attribute attached."""
+    if sender is None:
+        sender = SearchSender(name="Sender", email="sender@example.com")
     hit = SearchHit(
         id=msg_id,
         mail_account_id=str(uuid.uuid4()),

@@ -10,6 +10,7 @@ from app.api.search.schemas import (
     MailSearchResponse,
     SearchHit,
     SearchParticipant,
+    SearchSender,
 )
 
 if TYPE_CHECKING:
@@ -110,6 +111,8 @@ class SearchService:
                 "mail_account_id",
                 "subject",
                 "sender",
+                "sender_email",
+                "body_preview",
                 "participants",
                 "received_date_time",
                 "folder_ids",
@@ -162,12 +165,28 @@ class SearchService:
                 for p in participants_data
             ]
 
+            sender_val = source.get("sender")
+            sender_obj: SearchSender | None = None
+            if isinstance(sender_val, dict):
+                sender_obj = SearchSender(
+                    name=sender_val.get("name"),
+                    email=sender_val.get("email"),
+                )
+            elif isinstance(sender_val, SearchSender):
+                sender_obj = sender_val
+
+            sender_email_val = source.get("sender_email")
+            if not sender_email_val and sender_obj:
+                sender_email_val = sender_obj.email
+
             results.append(
                 SearchHit(
                     id=source["id"],
                     mail_account_id=source["mail_account_id"],
                     subject=source.get("subject"),
-                    sender=source.get("sender"),
+                    sender=sender_obj,
+                    sender_email=sender_email_val,
+                    body_preview=source.get("body_preview"),
                     participants=participants,
                     received_date_time=source.get("received_date_time"),
                     folder_ids=source.get("folder_ids", []),

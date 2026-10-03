@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -36,6 +37,7 @@ from mip_providers import (
     AuthExpiredError,
     DeltaCursorExpiredError,
     MicrosoftGraphMailAdapter,
+    ProviderError,
     ProviderMessage,
     ProviderNotFoundError,
     ProviderPermissionError,
@@ -60,6 +62,7 @@ class SyncResult:
     removals_processed: int
     resync_triggered: bool = False
     error: str | None = None
+    retry_after: int | float | None = None
 
 
 class SyncOrchestrator:
@@ -155,10 +158,33 @@ class SyncOrchestrator:
         total_removals = 0
         resync_triggered = False
         refresh_attempted = False
+        page_count = 0
+        max_pages_per_sync = 1000
+        seen_tokens: set[str] = set()
 
         # 3. Main Sync Loop
         try:
             while True:
+                page_count += 1
+                if page_count > max_pages_per_sync:
+                    logger.warning(
+                        "Exceeded max pages limit (%d) syncing folder %s",
+                        max_pages_per_sync,
+                        mail_folder_id,
+                    )
+                    await self.sync_state_repo.release_sync_lease(
+                        sync_state_id, worker_id, lease_version
+                    )
+                    await self.session.commit()
+                    return SyncResult(
+                        mail_folder_id=mail_folder_id,
+                        state=current_state,
+                        messages_processed=total_processed,
+                        messages_mutated=total_mutated,
+                        removals_processed=total_removals,
+                        error="Max pagination depth exceeded",
+                    )
+
                 # 3a. Renew/verify lease before outbound HTTP call
                 renewed = await self.sync_state_repo.renew_sync_lease(
                     sync_state_id, worker_id, lease_version, lease_duration
@@ -216,6 +242,7 @@ class SyncOrchestrator:
                                 state=MailSyncStateValue.AUTH_REQUIRED,
                                 clear_lock=True,
                             )
+                            await self.session.commit()
                             return SyncResult(
                                 mail_folder_id=mail_folder_id,
                                 state=MailSyncStateValue.AUTH_REQUIRED,
@@ -232,6 +259,7 @@ class SyncOrchestrator:
                             state=MailSyncStateValue.AUTH_REQUIRED,
                             clear_lock=True,
                         )
+                        await self.session.commit()
                         return SyncResult(
                             mail_folder_id=mail_folder_id,
                             state=MailSyncStateValue.AUTH_REQUIRED,
@@ -249,6 +277,7 @@ class SyncOrchestrator:
                         state=MailSyncStateValue.ERROR,
                         clear_lock=True,
                     )
+                    await self.session.commit()
                     return SyncResult(
                         mail_folder_id=mail_folder_id,
                         state=MailSyncStateValue.ERROR,
@@ -258,6 +287,16 @@ class SyncOrchestrator:
                         error=str(err),
                     )
                 except ProviderRateLimitedError as err:
+                    retry_after_val = getattr(err, "retry_after", None) or 30
+                    logger.warning(
+                        "Rate limited syncing folder %s (retry_after=%s)",
+                        mail_folder_id,
+                        retry_after_val,
+                    )
+                    await self.sync_state_repo.release_sync_lease(
+                        sync_state_id, worker_id, lease_version
+                    )
+                    await self.session.commit()
                     return SyncResult(
                         mail_folder_id=mail_folder_id,
                         state=current_state,
@@ -265,7 +304,31 @@ class SyncOrchestrator:
                         messages_mutated=total_mutated,
                         removals_processed=total_removals,
                         error=str(err),
+                        retry_after=retry_after_val,
                     )
+                except ProviderError as err:
+                    if getattr(err, "status_code", None) and err.status_code >= 500:
+                        retry_after_val = getattr(err, "retry_after", None) or 5
+                        logger.warning(
+                            "Provider 5xx error (%d) syncing folder %s: %s",
+                            err.status_code,
+                            mail_folder_id,
+                            err,
+                        )
+                        await self.sync_state_repo.release_sync_lease(
+                            sync_state_id, worker_id, lease_version
+                        )
+                        await self.session.commit()
+                        return SyncResult(
+                            mail_folder_id=mail_folder_id,
+                            state=current_state,
+                            messages_processed=total_processed,
+                            messages_mutated=total_mutated,
+                            removals_processed=total_removals,
+                            error=str(err),
+                            retry_after=retry_after_val,
+                        )
+                    raise
                 except DeltaCursorExpiredError:
                     # 410 Resync Workflow
                     resync_triggered = True
@@ -283,6 +346,30 @@ class SyncOrchestrator:
                     )
                     # Restart delta sync loop with new resync_generation
                     continue
+
+                if page.has_more and page.next_continuation:
+                    if (
+                        page.next_continuation == sync_token
+                        or page.next_continuation in seen_tokens
+                    ):
+                        logger.error(
+                            "Repeated continuation token detected for folder %s: %s",
+                            mail_folder_id,
+                            page.next_continuation,
+                        )
+                        await self.sync_state_repo.release_sync_lease(
+                            sync_state_id, worker_id, lease_version
+                        )
+                        await self.session.commit()
+                        return SyncResult(
+                            mail_folder_id=mail_folder_id,
+                            state=current_state,
+                            messages_processed=total_processed,
+                            messages_mutated=total_mutated,
+                            removals_processed=total_removals,
+                            error="Loop detected: repeated continuation token",
+                        )
+                    seen_tokens.add(page.next_continuation)
 
                 # 3c. Process Page inside DB Transaction
                 async with (
@@ -375,6 +462,11 @@ class SyncOrchestrator:
 
         except Exception as exc:
             logger.exception("Synchronization failed for folder %s: %s", mail_folder_id, exc)
+            with suppress(Exception):
+                await self.sync_state_repo.release_sync_lease(
+                    sync_state_id, worker_id, lease_version
+                )
+                await self.session.commit()
 
             return SyncResult(
                 mail_folder_id=mail_folder_id,

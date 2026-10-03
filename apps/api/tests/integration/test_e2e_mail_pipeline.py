@@ -691,6 +691,7 @@ async def test_scenario_11_failure_and_retry(
     ev_id = events[0].id
 
     failing_es_adapter = MagicMock(spec=ElasticsearchMailAdapter)
+    failing_es_adapter.base_url = "http://localhost:9200"
     failing_es_adapter.index_message = AsyncMock(
         side_effect=RetryableElasticsearchError("ES 503 Service Unavailable", status_code=503)
     )

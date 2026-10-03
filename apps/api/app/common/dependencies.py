@@ -7,7 +7,7 @@ clean testability (override in tests) without a heavy DI framework.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.common.config import Settings, get_settings
 from mip_models.database import AsyncSessionFactory, get_async_engine
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 # Application-scoped singletons (initialized once at startup)
 # ---------------------------------------------------------------------------
 
+_engine: Any | None = None
 _session_factory: AsyncSessionFactory | None = None
 
 
@@ -29,12 +30,12 @@ def init_dependencies(settings: Settings) -> None:
 
     Called once during the application lifespan startup event.
     """
-    global _session_factory
-    engine = get_async_engine(
+    global _engine, _session_factory
+    _engine = get_async_engine(
         settings.database_url,
         echo=settings.app_debug,
     )
-    _session_factory = AsyncSessionFactory(engine)
+    _session_factory = AsyncSessionFactory(_engine)
 
 
 async def shutdown_dependencies() -> None:
@@ -42,8 +43,16 @@ async def shutdown_dependencies() -> None:
 
     Called once during the application lifespan shutdown event.
     """
-    global _session_factory
+    global _engine, _session_factory
+    if _engine is not None:
+        await _engine.dispose()
+        _engine = None
     _session_factory = None
+
+
+def get_engine() -> Any | None:
+    """Return the application-scoped database engine for testing/observability."""
+    return _engine
 
 
 # ---------------------------------------------------------------------------

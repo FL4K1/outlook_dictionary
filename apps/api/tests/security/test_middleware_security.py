@@ -115,7 +115,7 @@ class TestTokenLeakage:
         request = _make_request({"Authorization": f"Bearer {raw_token}"})
         call_next = AsyncMock()
         with (
-            patch("app.auth.middleware.get_session_factory", return_value=MagicMock()),
+            patch("app.auth.middleware.dependencies.get_session_factory", return_value=MagicMock()),
             pytest.raises(TokenInvalidError),
         ):
             await middleware.dispatch(request, call_next)
@@ -129,7 +129,7 @@ class TestTokenLeakage:
         request = _make_request({"Authorization": f"Bearer {raw_token}"})
         call_next = AsyncMock()
         with (
-            patch("app.auth.middleware.get_session_factory", return_value=MagicMock()),
+            patch("app.auth.middleware.dependencies.get_session_factory", return_value=MagicMock()),
             pytest.raises(TokenInvalidError),
         ):
             await middleware.dispatch(request, call_next)
@@ -166,7 +166,10 @@ class TestJtiPresenceOnly:
         mock_factory = _make_mock_factory(mock_session)
 
         with (
-            patch("app.auth.middleware.get_session_factory", return_value=mock_factory),
+            patch(
+                "app.auth.middleware.dependencies.get_session_factory",
+                return_value=mock_factory,
+            ),
             pytest.raises(TokenInvalidError, match="Session not found"),
         ):
             await middleware.dispatch(request, call_next)
@@ -182,7 +185,7 @@ class TestDefaultDeny:
         request = _make_request({}, path="/unknown/deep/path")
         call_next = AsyncMock()
         with (
-            patch("app.auth.middleware.get_session_factory", return_value=MagicMock()),
+            patch("app.auth.middleware.dependencies.get_session_factory", return_value=MagicMock()),
             pytest.raises(AuthenticationError),
         ):
             await middleware.dispatch(request, call_next)
@@ -227,7 +230,7 @@ class TestMalformedClaims:
         call_next = AsyncMock()
 
         with (
-            patch("app.auth.middleware.get_session_factory", return_value=MagicMock()),
+            patch("app.auth.middleware.dependencies.get_session_factory", return_value=MagicMock()),
             pytest.raises(TokenInvalidError),
         ):
             await middleware.dispatch(request, call_next)

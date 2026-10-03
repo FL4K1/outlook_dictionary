@@ -1,122 +1,187 @@
-# Mail Intelligence Platform — Local Development Infrastructure
-#
-# Usage:
-#   docker compose -f infra/docker/docker-compose.yml up -d
-#   (or: make docker-up)
-#
-# This file defines ALL infrastructure dependencies required for local
-# development. The API application itself runs on the host (not in Docker)
-# for hot-reload and debugging convenience.
+name: mip-local
+
+# PR-3.3 deployment topology. Before this change the compose file had no worker
+# service at all, no migration step, no `restart:` policies, and the API was not
+# wired to Elasticsearch -- so it started cleanly and returned 503 on every
+# search while compose reported it healthy.
+
+x-mip-shared-env: &mip-shared-env
+  APP_ENV: ${APP_ENV:-development}
+  APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+  APP_LOG_FORMAT: ${APP_LOG_FORMAT:-json}
+
+  # Canonical database URL. The worker image also uses this for migrations
+  # (PR-3.3 / M10, H10): apps/api/alembic/env.py resolves the URL only from the
+  # Alembic config, so mip_workers.migrations injects it programmatically.
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mip}:${POSTGRES_PASSWORD:-mip_dev_password}@postgres:5432/${POSTGRES_DB:-mail_intelligence}
+
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_DB: "0"
+
+  # PR-3.3 / B2: the worker refuses to start without an explicit
+  # ELASTICSEARCH_HOST. It previously fell back to http://localhost:9200.
+  ELASTICSEARCH_HOST: elasticsearch
+  ELASTICSEARCH_PORT: "9200"
+  ELASTICSEARCH_SCHEME: http
+
+  # PR-3.3 / M7: one dimension value shared by the embedding producer, the index
+  # provisioning, and retrieval. Changing it requires new tenant indices.
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
+  EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-mock-embedding-v1}
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: mip-postgres
     environment:
-      POSTGRES_USER: mip
-      POSTGRES_PASSWORD: mip_dev_password
-      POSTGRES_DB: mail_intelligence
+      POSTGRES_USER: ${POSTGRES_USER:-mip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mip_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-mail_intelligence}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mip -d mail_intelligence"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mip} -d ${POSTGRES_DB:-mail_intelligence}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    container_name: mip-redis
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6380:6379"
+      - "${REDIS_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
-      retries: 5
-    command: redis-server --appendonly yes
+      retries: 10
+    restart: unless-stopped
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
-    container_name: mip-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - cluster.name=mip-dev
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
     ports:
-      - "9200:9200"
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS http://localhost:9200/_cluster/health
+          | grep -qE '"status":"(green|yellow)"'
       interval: 10s
       timeout: 10s
-      retries: 10
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
 
-  minio:
-    image: minio/minio:latest
-    container_name: mip-minio
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  api:
+  # PR-3.3 / M10, H10: schema migration runs to completion before any
+  # application process starts. Uses the worker image, which ships the Alembic
+  # environment alongside the worker package.
+  migrate:
     build:
-      context: ../../
-      dockerfile: apps/api/Dockerfile
-    container_name: mip-api
-    ports:
-      - "8080:8000"
+      context: ../..
+      dockerfile: apps/workers/Dockerfile
+    command: ["python", "-m", "mip_workers.migrations", "upgrade", "head"]
     environment:
-      APP_ENV: development
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: mip
-      POSTGRES_PASSWORD: mip_dev_password
-      POSTGRES_DB: mail_intelligence
+      <<: *mip-shared-env
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      <<: *mip-shared-env
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8000"
+
+      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET:?set JWT_SIGNING_SECRET in .env (min 32 chars)}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ISSUER: ${JWT_ISSUER:-mip}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-mip-api}
+
+      ENCRYPTION_DEK: ${ENCRYPTION_DEK:?set ENCRYPTION_DEK in .env (64 hex chars)}
+
+      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
+      ENTRA_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET:-}
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
+      ENTRA_REDIRECT_URI: ${ENTRA_REDIRECT_URI:-}
+      ENTRA_JWKS_ENDPOINT: ${ENTRA_JWKS_ENDPOINT:-}
+      ENTRA_ISSUER: ${ENTRA_ISSUER:-}
+      ENTRA_AUDIENCE: ${ENTRA_AUDIENCE:-}
+
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30.0}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    # Dependency-aware: `/health/live` is intentionally dependency-free, so the
+    # API reports healthy as soon as it is serving.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
+    restart: unless-stopped
 
-  web:
+  # PR-3.3 / B1, H1: the ARQ worker was previously absent from compose entirely.
+  worker:
     build:
-      context: ../../apps/web
-      dockerfile: Dockerfile
-    container_name: mip-web
-    ports:
-      - "3001:3000"
+      context: ../..
+      dockerfile: apps/workers/Dockerfile
+    command: ["arq", "mip_workers.worker.WorkerSettings"]
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8080
+      <<: *mip-shared-env
+
+      ENCRYPTION_DEK: ${ENCRYPTION_DEK:?set ENCRYPTION_DEK in .env (64 hex chars)}
+
+      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
+      ENTRA_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET:-}
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
+      ENTRA_ISSUER: ${ENTRA_ISSUER:-}
+      ENTRA_AUDIENCE: ${ENTRA_AUDIENCE:-}
+      ENTRA_JWKS_ENDPOINT: ${ENTRA_JWKS_ENDPOINT:-}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
-      api:
+      migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    # No `ports:` -- the worker has no HTTP listener. Liveness is asserted by
+    # the image HEALTHCHECK against the ARQ heartbeat key in Redis.
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
   elasticsearch_data:
-  minio_data:

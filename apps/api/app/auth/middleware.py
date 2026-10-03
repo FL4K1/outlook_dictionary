@@ -40,7 +40,7 @@ from app.auth.exceptions import (
     TokenInvalidError,
 )
 from app.auth.public_routes import is_public_route
-from app.common.dependencies import get_session_factory
+from app.common import dependencies
 from app.common.logging import get_logger
 from app.repositories.auth import DeviceSessionRepository
 from app.repositories.core import MembershipRepository, TenantRepository
@@ -88,7 +88,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         if is_public_route(method, path):
             return await call_next(request)
 
-        factory = get_session_factory()
+        factory = dependencies.get_session_factory()
         if factory is None:
             security_event_emitter.emit(
                 SecurityEvent(
@@ -398,14 +398,14 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 )
             )
 
-            response = await call_next(request)
             await session.commit()
-            await session_gen.aclose()
-            return response
 
         except Exception:
             with suppress(Exception):
                 await session.rollback()
+            raise
+        finally:
             with suppress(Exception):
                 await session_gen.aclose()
-            raise
+
+        return await call_next(request)

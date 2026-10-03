@@ -8,11 +8,28 @@ version = "0.1.0"
 description = "Mail Intelligence Platform — Background task workers (sync, indexer, embedder)"
 requires-python = ">=3.12"
 dependencies = [
-    "arq>=0.26.0",
+    "arq>=0.28.0",
     "redis>=5.2.0",
+    # Used directly by mip_workers.es_adapter and mip_workers.es_provisioning.
+    # Previously only present transitively via mip-providers, which is an
+    # undeclared dependency (PR-3.3 / M12).
+    "httpx>=0.27.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "prometheus-client>=0.21.0",
     "mip-models",
     "mip-providers",
     "mip-email-parser",
+    # PR-3.3 / B1: mip_workers.worker imports mip_ai.embeddings, and
+    # mip_workers.backfill / mip_workers.outbox_worker import mip_ai.*.
+    # Without this the worker image raises ModuleNotFoundError at import time.
+    "mip-ai",
+    # PR-3.3 / B1: the outbox projection reuses the API repositories
+    # (app.repositories.mail) and the sync job reuses the frozen
+    # SyncOrchestrator (app.services.sync_orchestrator). The worker also
+    # consumes the canonical Settings and logging configuration from
+    # app.common.*. This is the pre-existing layering, made explicit rather
+    # than left as an undeclared import.
+    "mip-api",
 ]
 
 

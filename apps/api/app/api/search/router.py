@@ -15,6 +15,7 @@ from app.api.search.schemas import (
 )
 from app.auth.dependencies import require_tenant_membership
 from app.common.config import Settings, get_settings
+from app.common.dependencies import get_db
 from app.search.elasticsearch_search import (
     ElasticsearchSearchAdapter,
     SearchInvalidQueryError,
@@ -37,6 +38,8 @@ from mip_ai.query_understanding import (
 )
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from app.auth.context import AuthenticationContext
 
 logger = logging.getLogger(__name__)
@@ -106,9 +109,10 @@ async def search_mail(
             detail=str(exc),
         ) from exc
     except SearchServiceUnavailableError as exc:
+        logger.warning("Search service unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="Search service unavailable.",
         ) from exc
     except Exception as exc:
         logger.exception("Unexpected error during search_mail")
@@ -129,6 +133,7 @@ async def search_mail_natural_language(
     body: NLMailSearchRequest,
     context: AuthenticationContext = Depends(require_tenant_membership()),
     nl_service: NaturalLanguageSearchService = Depends(get_natural_language_search_service),
+    db: AsyncSession = Depends(get_db),
 ) -> NaturalLanguageSearchResponse:
     """Execute natural language search bounded securely to authenticated tenant."""
     try:
@@ -138,6 +143,7 @@ async def search_mail_natural_language(
             user_timezone=body.user_timezone,
             page_size=body.page_size,
             search_after=body.search_after,
+            db_session=db,
             synthesize=body.synthesize,
         )
     except (
@@ -157,19 +163,22 @@ async def search_mail_natural_language(
         QueryUnderstandingTransientError,
         QueryUnderstandingPermanentError,
     ) as exc:
+        logger.warning("Query understanding service error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Query understanding service failed: {exc}",
+            detail="Query understanding service error.",
         ) from exc
     except QueryUnderstandingConfigurationError as exc:
+        logger.error("Query understanding service configuration error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query understanding service misconfigured: {exc}",
+            detail="Query understanding service configuration error.",
         ) from exc
     except SearchServiceUnavailableError as exc:
+        logger.warning("Search service unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="Search service unavailable.",
         ) from exc
     except Exception as exc:
         logger.exception("Unexpected error during natural language mail search")

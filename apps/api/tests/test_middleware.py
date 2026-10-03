@@ -113,7 +113,10 @@ class TestAuthenticationMiddlewareUnit:
 
         call_next = AsyncMock()
         with (
-            patch("app.auth.middleware.get_session_factory", return_value=MagicMock()),
+            patch(
+                "app.auth.middleware.dependencies.get_session_factory",
+                return_value=MagicMock(),
+            ),
             pytest.raises(AuthenticationError),
         ):
             await middleware.dispatch(request, call_next)
@@ -222,7 +225,9 @@ class TestProviderDerivation:
 
         call_next = AsyncMock(return_value=Response(status_code=200))
 
-        with patch("app.auth.middleware.get_session_factory", return_value=mock_factory):
+        with patch(
+            "app.auth.middleware.dependencies.get_session_factory", return_value=mock_factory
+        ):
             response = await middleware.dispatch(request, call_next)
 
         assert response.status_code == 200
@@ -311,7 +316,9 @@ class TestProviderDerivation:
 
         call_next = AsyncMock(return_value=Response(status_code=200))
 
-        with patch("app.auth.middleware.get_session_factory", return_value=mock_factory):
+        with patch(
+            "app.auth.middleware.dependencies.get_session_factory", return_value=mock_factory
+        ):
             response = await middleware.dispatch(request, call_next)
 
         assert response.status_code == 200
@@ -403,7 +410,9 @@ class TestProviderDerivation:
         call_next = AsyncMock()
 
         with (
-            patch("app.auth.middleware.get_session_factory", return_value=mock_factory),
+            patch(
+                "app.auth.middleware.dependencies.get_session_factory", return_value=mock_factory
+            ),
             pytest.raises(TokenInvalidError, match="Session identity not found"),
         ):
             await middleware.dispatch(request, call_next)

@@ -1,6 +1,14 @@
+from __future__ import annotations
+
 import datetime
 import uuid
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+    from mip_ai.query_understanding.base import QueryUnderstandingResult
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -9,7 +17,6 @@ from app.auth.context import AuthenticationContext
 from app.auth.dependencies import get_auth_context
 from app.main import create_app
 from app.search.service import SearchService
-from mip_ai.query_understanding.base import QueryUnderstandingResult
 
 
 @pytest.mark.asyncio
@@ -29,8 +36,14 @@ async def test_nl_search_api_endpoint_success(monkeypatch: pytest.MonkeyPatch) -
             membership_id=uuid.uuid4(),
         )
 
+    from app.common.dependencies import get_db
+
+    async def mock_get_db() -> AsyncGenerator[AsyncMock, None]:
+        yield AsyncMock()
+
     app = create_app()
     app.dependency_overrides[get_auth_context] = mock_auth
+    app.dependency_overrides[get_db] = mock_get_db
 
     mock_search_service = AsyncMock(spec=SearchService)
     from app.api.search.schemas import MailSearchResponse, SearchHit
@@ -39,7 +52,7 @@ async def test_nl_search_api_endpoint_success(monkeypatch: pytest.MonkeyPatch) -
         id=str(uuid.uuid4()),
         mail_account_id=str(uuid.uuid4()),
         subject="Kubernetes Cluster Upgrade",
-        sender="Rahul",
+        sender={"name": "Rahul", "email": "rahul@example.com"},
         participants=[],
         received_date_time=datetime.datetime(2026, 9, 20, 10, 0, 0, tzinfo=datetime.UTC),
         folder_ids=[],
@@ -55,13 +68,16 @@ async def test_nl_search_api_endpoint_success(monkeypatch: pytest.MonkeyPatch) -
 
     app.dependency_overrides[get_search_service] = lambda: mock_search_service
 
-    with patch("app.auth.middleware.is_public_route", return_value=True):
+    with (
+        patch("app.auth.middleware.is_public_route", return_value=True),
+        patch("app.auth.public_routes.is_public_route", return_value=True),
+    ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/search/mail/natural-language",
                 json={
-                    "natural_query": "unread emails from Rahul about Kubernetes",
+                    "natural_query": "unread emails about Kubernetes",
                     "user_timezone": "UTC",
                     "page_size": 10,
                 },
@@ -107,9 +123,18 @@ async def test_nl_search_api_endpoint_malformed_llm_output_502(
             membership_id=uuid.uuid4(),
         )
 
-    app.dependency_overrides[get_auth_context] = mock_auth
+    from app.common.dependencies import get_db
 
-    with patch("app.auth.middleware.is_public_route", return_value=True):
+    async def mock_get_db_2() -> AsyncGenerator[AsyncMock, None]:
+        yield AsyncMock()
+
+    app.dependency_overrides[get_auth_context] = mock_auth
+    app.dependency_overrides[get_db] = mock_get_db_2
+
+    with (
+        patch("app.auth.middleware.is_public_route", return_value=True),
+        patch("app.auth.public_routes.is_public_route", return_value=True),
+    ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
@@ -120,4 +145,4 @@ async def test_nl_search_api_endpoint_malformed_llm_output_502(
             )
 
     assert resp.status_code == 502, resp.text
-    assert "Query understanding service failed" in resp.json()["detail"]
+    assert resp.json()["detail"] == "Query understanding service error."

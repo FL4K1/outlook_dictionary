@@ -69,6 +69,13 @@ class MailSearchRequest(BaseModel):
     )
 
 
+class SearchSender(BaseModel):
+    name: str | None = None
+    email: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class SearchParticipant(BaseModel):
     name: str | None = None
     email: str | None = None
@@ -81,7 +88,9 @@ class SearchHit(BaseModel):
     id: str
     mail_account_id: str
     subject: str | None = None
-    sender: str | None = None
+    sender: SearchSender | None = None
+    sender_email: str | None = None
+    body_preview: str | None = None
     participants: list[SearchParticipant] = Field(default_factory=list)
     received_date_time: datetime.datetime | None = None
     folder_ids: list[str] = Field(default_factory=list)

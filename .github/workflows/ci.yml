@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
 jobs:
   lint:
     name: Lint & Format
@@ -23,7 +26,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install ruff
-        run: pip install "ruff==0.15.22"
+        run: pip install "ruff==0.8.0"
 
       - name: Ruff check
         run: ruff check .
@@ -52,9 +55,15 @@ jobs:
           pip install -e "apps/api[dev]"
           pip install mypy types-redis
 
+      # PR-3.3: mip_workers added to the type-check surface. The worker imports
+      # the API package (app.repositories.mail, app.services.sync_orchestrator),
+      # so both must be installed for the check to resolve.
       - name: MyPy
-        run: mypy -p mip_models -p mip_providers -p mip_ai -p mip_email_parser -p app --config-file pyproject.toml
-        continue-on-error: true  # Strict mode may have initial warnings
+        run: |
+          mypy -p mip_models -p mip_providers -p mip_ai -p mip_email_parser -p app \
+            --config-file pyproject.toml
+          mypy -p mip_workers --config-file pyproject.toml
+        continue-on-error: true  # Strict mode still has outstanding warnings
 
   test:
     name: Tests
@@ -83,7 +92,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       elasticsearch:
-        image: elasticsearch:8.15.0
+        # PR-3.3: use the same registry as docker-compose. The Docker Hub
+        # `elasticsearch` image is a community repack, not the vendor image.
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
         env:
           discovery.type: single-node
           xpack.security.enabled: "false"
@@ -91,10 +102,23 @@ jobs:
         ports:
           - 9200:9200
         options: >-
-          --health-cmd "curl -s http://localhost:9200/_cluster/health || exit 1"
+          --health-cmd "curl -fsS http://localhost:9200/_cluster/health || exit 1"
           --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+          --health-timeout 10s
+          --health-retries 20
+    env:
+      APP_ENV: testing
+      CI: "true"
+      TEST_DATABASE_URL: postgresql+asyncpg://mip:mip_dev_password@localhost:5433/mail_intelligence
+      DATABASE_URL: postgresql+asyncpg://mip:mip_dev_password@localhost:5433/mail_intelligence
+      # PR-3.3 / B2: the worker refuses to start without an explicit host.
+      ELASTICSEARCH_HOST: localhost
+      ELASTICSEARCH_PORT: "9200"
+      ELASTICSEARCH_SCHEME: http
+      REDIS_HOST: localhost
+      REDIS_PORT: "6380"
+      EMBEDDING_PROVIDER: mock
+      EMBEDDING_DIMENSION: "1536"
     steps:
       - uses: actions/checkout@v4
 
@@ -113,19 +137,105 @@ jobs:
           pip install -e "apps/api[dev]"
           pip install -e "apps/workers"
 
-      - name: Run tests
+      # PR-3.3 / M10, H10: run migrations before anything else. Previously the
+      # test job provisioned PostgreSQL and went straight to pytest, so every
+      # database-backed test silently skipped because the schema never existed.
+      - name: Apply database migrations
+        run: python -m mip_workers.migrations upgrade head
+
+      - name: Verify migration is at head
+        run: |
+          python -m mip_workers.migrations current
+          python -m mip_workers.migrations head
+
+      # PR-3.3 / B1: fail fast here if the worker entrypoint cannot import.
+      # This is the regression gate for the missing mip-ai / mip-api packaging.
+      - name: Worker import smoke test
+        run: |
+          python -c "import mip_workers; import mip_workers.worker as w; print('worker import ok')"
+          python -c "from mip_workers.worker import WorkerSettings; print([f.__name__ for f in WorkerSettings.functions])"
+
+      # PR-3.3 / B2: the worker must fail fast when Elasticsearch is unconfigured
+      # rather than defaulting to localhost:9200.
+      - name: Worker fails fast without ELASTICSEARCH_HOST
+        run: |
+          env -u ELASTICSEARCH_HOST python -c "
+          from mip_workers.es_provisioning import resolve_elasticsearch_url, ElasticsearchConfigurationError
+          try:
+              resolve_elasticsearch_url()
+          except ElasticsearchConfigurationError as exc:
+              print('OK: refused to start ->', exc)
+          else:
+              raise SystemExit('FAIL: worker did not refuse an unconfigured Elasticsearch host')
+          "
+
+      - name: Run full test suite
         run: pytest -v
-        env:
-          APP_ENV: testing
-          CI: "true"
-          TEST_DATABASE_URL: postgresql+asyncpg://mip:mip_dev_password@localhost:5433/mail_intelligence
-          DATABASE_URL: postgresql+asyncpg://mip:mip_dev_password@localhost:5433/mail_intelligence
+
+      # PR-3.3: the release-critical suites must actually execute. A green run
+      # that silently skipped the database, auth, and ES paths proved nothing.
+      - name: Release-critical suites (zero skips enforced)
+        run: |
+          pytest -q --junitxml=release-critical.xml \
+            apps/workers/tests \
+            apps/api/tests/integration/test_mail_sync_foundation.py \
+            apps/api/tests/integration/test_e2e_mail_pipeline.py \
+            apps/api/tests/integration/test_search_api.py \
+            apps/api/tests/integration/test_hybrid_search.py
+
+      - name: Enforce zero skips in release-critical suites
+        if: always()
+        run: |
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          tree = ET.parse("release-critical.xml")
+          root = tree.getroot()
+          suites = [root] if root.tag == "testsuite" else list(root)
+          total = skipped = failures = errors = 0
+          for suite in suites:
+              total += int(suite.get("tests", 0))
+              skipped += int(suite.get("skipped", 0))
+              failures += int(suite.get("failures", 0))
+              errors += int(suite.get("errors", 0))
+          print(f"release-critical: {total} tests, {skipped} skipped, "
+                f"{failures} failures, {errors} errors")
+          if total == 0:
+              print("FAIL: no release-critical tests were collected")
+              sys.exit(1)
+          if skipped:
+              print("FAIL: release-critical suites must execute with ZERO skips")
+              sys.exit(1)
+          PY
+
+      # PR-3.3 (reporting only): the auth/middleware integration suite is still
+      # disabled at module level in a file owned by another workstream
+      # (apps/api/tests/integration/test_middleware_integration.py sets
+      # `pytestmark = pytest.mark.skip`). Session revocation, idle timeout,
+      # tenant mismatch, org mismatch, and permission denial are therefore only
+      # verified against mocks. This step makes the gap visible in CI output
+      # until that module is un-skipped.
+      - name: Auth/middleware integration coverage (known gap)
+        if: always()
+        continue-on-error: true
+        run: |
+          pytest -q -rs apps/api/tests/integration/test_middleware_integration.py \
+            apps/api/tests/integration/test_repositories.py
 
   docker:
     name: Docker Build Validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # PR-3.3 / B1: the worker image was never built in CI, which is why the
+      # missing mip-ai / mip-api packages went unnoticed.
+      - name: Build worker image
+        run: docker build -f apps/workers/Dockerfile -t mip-workers:ci .
+
+      - name: Worker image import smoke test
+        run: docker run --rm --entrypoint python mip-workers:ci -c "import mip_workers.worker; print('image import ok')"
 
       - name: Build API image
         run: docker build -f apps/api/Dockerfile -t mip-api:ci .
@@ -149,6 +259,7 @@ jobs:
           pip install -e "packages/ai"
           pip install -e "packages/email_parser"
           pip install -e "apps/api"
+          pip install -e "apps/workers"
           pip install pip-audit
 
       - name: Dependency vulnerability scan
