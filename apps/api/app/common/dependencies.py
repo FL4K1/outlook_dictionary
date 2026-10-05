@@ -17,12 +17,15 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+import redis.asyncio as redis
+
 # ---------------------------------------------------------------------------
 # Application-scoped singletons (initialized once at startup)
 # ---------------------------------------------------------------------------
 
 _engine: Any | None = None
 _session_factory: AsyncSessionFactory | None = None
+_redis_client: Any | None = None
 
 
 def init_dependencies(settings: Settings) -> None:
@@ -30,7 +33,7 @@ def init_dependencies(settings: Settings) -> None:
 
     Called once during the application lifespan startup event.
     """
-    global _engine, _session_factory
+    global _engine, _session_factory, _redis_client
     _engine = get_async_engine(
         settings.database_url,
         echo=settings.app_debug,
@@ -38,16 +41,23 @@ def init_dependencies(settings: Settings) -> None:
     _session_factory = AsyncSessionFactory(_engine)
 
 
+    _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+
+
 async def shutdown_dependencies() -> None:
     """Clean up application-scoped dependencies.
 
     Called once during the application lifespan shutdown event.
     """
-    global _engine, _session_factory
+    global _engine, _session_factory, _redis_client
     if _engine is not None:
         await _engine.dispose()
         _engine = None
     _session_factory = None
+
+    if _redis_client is not None:
+        await _redis_client.close()
+        _redis_client = None
 
 
 def get_engine() -> Any | None:
@@ -94,3 +104,13 @@ def get_session_factory() -> AsyncSessionFactory | None:
     dependency injection system.
     """
     return _session_factory
+
+
+def get_redis() -> Any:
+    """Return the application-scoped Redis client.
+
+    Used by rate limiting and cache operations.
+    """
+    if _redis_client is None:
+        raise RuntimeError("Redis client not initialized.")
+    return _redis_client

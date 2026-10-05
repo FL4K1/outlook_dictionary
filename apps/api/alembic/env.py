@@ -27,15 +27,15 @@ target_metadata = Base.metadata
 
 
 def get_database_url() -> str:
-    """Resolve the database URL.
+    """Resolve the database URL from settings, falling back to config if unspecified."""
+    from app.common.config import get_settings
 
-    Priority:
-    1. Alembic command-line override (-x sqlalchemy.url=...)
-    2. alembic.ini sqlalchemy.url setting
-    """
-    url = config.get_main_option("sqlalchemy.url")
+    url = get_settings().database_url
+    if not url:
+        url = config.get_main_option("sqlalchemy.url")
+
     if url is None:
-        msg = "sqlalchemy.url not configured in alembic.ini"
+        msg = "Database URL could not be resolved from settings or alembic.ini"
         raise ValueError(msg)
     return url
 

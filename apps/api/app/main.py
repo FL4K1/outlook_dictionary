@@ -102,6 +102,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         policy_engine=PolicyEngine(),
         token_service=TokenService(settings),
     )
+
+    if "*" in settings.cors_origins:
+        raise ValueError("CORS wildcard origin cannot be combined with credentials")
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -113,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # --- Exception Handlers ---
     register_exception_handlers(app)
 
+    from app.api.mail.router import router as mail_router
     from app.api.search.router import router as search_router
 
     # --- Routers ---
@@ -120,5 +125,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(entra_router)
     app.include_router(search_router)
+    app.include_router(mail_router)
 
     return app

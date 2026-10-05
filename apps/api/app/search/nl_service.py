@@ -288,7 +288,8 @@ class NaturalLanguageSearchService:
         if synthesize and self.synthesis_provider and mail_results.items:
             try:
                 synthesis = await self.synthesis_provider.synthesize(
-                    query=natural_query, hits=mail_results.items
+                    query=natural_query,
+                    hits=mail_results.items,  # type: ignore[arg-type]
                 )
             except SearchSynthesisError as e:
                 logger.error("Synthesis gracefully degraded due to failure: %s", str(e))
@@ -316,9 +317,8 @@ class NaturalLanguageSearchService:
         accounts = res.scalars().all()
 
         if len(accounts) > 1:
-            matched = [a.email_address for a in accounts]
             raise EntityAmbiguityError(
-                f"Account hint '{account_hint}' matched multiple accounts: {matched}"
+                f"Account hint '{account_hint}' matched multiple accounts. Please be more specific."
             )
         if len(accounts) == 0:
             raise EntityResolutionError(f"No mail account found matching '{account_hint}'")
@@ -375,7 +375,7 @@ class NaturalLanguageSearchService:
 
         if len(emails) > 1:
             raise EntityAmbiguityError(
-                f"Sender name hint '{name}' matched multiple candidate emails: {list(emails)}"
+                f"Sender name hint '{name}' matched multiple candidates. Please be more specific."
             )
         if len(emails) == 0:
             raise EntityResolutionError(f"No sender identity found matching name '{name}'")
@@ -410,7 +410,7 @@ class NaturalLanguageSearchService:
 
                 if len(emails) > 1:
                     raise EntityAmbiguityError(
-                        f"Participant hint '{name}' matched multiple emails: {list(emails)}"
+                        f"Participant hint '{name}' matched multiple candidates. Please be more specific."
                     )
                 if len(emails) == 0:
                     raise EntityResolutionError(

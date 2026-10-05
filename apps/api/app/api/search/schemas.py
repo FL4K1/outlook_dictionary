@@ -96,6 +96,7 @@ class SearchHit(BaseModel):
     folder_ids: list[str] = Field(default_factory=list)
     is_read: bool
     has_attachments: bool
+    body: str | None = Field(default=None, exclude=True)
 
     model_config = ConfigDict(extra="ignore")
 

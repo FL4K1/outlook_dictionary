@@ -89,7 +89,9 @@ class GatewaySearchSynthesisProvider(SearchSynthesisProvider):
 
             sender = getattr(hit, "sender", "Unknown")
             if hasattr(sender, "email") or hasattr(sender, "name"):
-                sender = getattr(sender, "email", None) or getattr(sender, "name", None) or "Unknown"
+                sender = (
+                    getattr(sender, "email", None) or getattr(sender, "name", None) or "Unknown"
+                )
             elif isinstance(sender, dict):
                 sender = sender.get("email") or sender.get("name") or "Unknown"
 

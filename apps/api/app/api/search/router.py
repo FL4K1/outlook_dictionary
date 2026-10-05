@@ -16,6 +16,7 @@ from app.api.search.schemas import (
 from app.auth.dependencies import require_tenant_membership
 from app.common.config import Settings, get_settings
 from app.common.dependencies import get_db
+from app.common.rate_limit import RateLimiter
 from app.search.elasticsearch_search import (
     ElasticsearchSearchAdapter,
     SearchInvalidQueryError,
@@ -128,6 +129,7 @@ async def search_mail(
     status_code=status.HTTP_200_OK,
     summary="Natural Language Mail Search",
     description="Translate natural language queries into structured search requests executed against tenant messages.",  # noqa: E501
+    dependencies=[Depends(RateLimiter(requests=30, window=60))],
 )
 async def search_mail_natural_language(
     body: NLMailSearchRequest,

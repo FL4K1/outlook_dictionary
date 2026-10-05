@@ -38,6 +38,7 @@ from app.auth.sessions import SessionService
 from app.auth.tokens import AccessTokenSubject, TokenService
 from app.common.config import Settings, get_settings
 from app.common.dependencies import get_db
+from app.common.rate_limit import RateLimiter
 from app.repositories.auth import (
     DeviceSessionRepository,
     RefreshTokenFamilyRepository,
@@ -128,6 +129,7 @@ def _oauth2_error_response(
     status_code=status.HTTP_200_OK,
     summary="Refresh access token",
     description="Exchange a valid refresh token for a new access token and refresh token pair.",
+    dependencies=[Depends(RateLimiter(requests=30, window=60))],
 )
 async def refresh(
     request: Request,
@@ -145,6 +147,7 @@ async def refresh(
     status_code=status.HTTP_200_OK,
     summary="Issue tokens",
     description="OAuth2-compatible token endpoint. Phase 3 supports grant_type=refresh_token.",
+    dependencies=[Depends(RateLimiter(requests=10, window=60))],
 )
 async def token(
     request: Request,

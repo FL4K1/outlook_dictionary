@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from app.auth.exceptions import ProviderAuthenticationError
 from app.common.config import Settings, get_settings
 from app.common.dependencies import get_db, get_session_factory
+from app.common.rate_limit import RateLimiter
 from app.services.identity_provider import ProviderAuthError, ProviderAuthService
 from mip_providers.identity.entra import EntraIdentityProviderAuth
 
@@ -58,7 +59,11 @@ def _get_provider_auth_service(settings: Settings) -> ProviderAuthService:
     )
 
 
-@router.get("/entra", summary="Initiate Entra ID authorization flow")
+@router.get(
+    "/entra",
+    summary="Initiate Entra ID authorization flow",
+    dependencies=[Depends(RateLimiter(requests=15, window=60))],
+)
 async def entra_authorize(
     request: Request,
     settings: Settings = Depends(get_settings),
@@ -88,6 +93,7 @@ async def entra_authorize(
     response_model=EntraCallbackResponse,
     status_code=status.HTTP_200_OK,
     summary="Entra ID OAuth2 callback",
+    dependencies=[Depends(RateLimiter(requests=10, window=60))],
 )
 async def entra_callback(
     request: Request,
