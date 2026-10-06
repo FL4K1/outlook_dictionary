@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import collections.abc
+import collections.abc  # noqa: TC003
 import logging
-import uuid
+import uuid  # noqa: TC003
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -30,12 +30,12 @@ from app.mail.service import (
     MailLifecycleService,
     MessageDataService,
 )
-from app.search.service import SearchService
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from app.auth.context import AuthenticationContext
+    from app.search.service import SearchService
 
 
 logger = logging.getLogger(__name__)
@@ -146,8 +146,10 @@ async def get_sync_status(
             )
             for s in states
         ]
-    except MailAccountNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mail account not found")
+    except MailAccountNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mail account not found"
+        ) from e
 
 
 @router.delete(
@@ -165,8 +167,10 @@ async def deactivate_mail_account(
     try:
         account = await service.deactivate_account(context=context, account_id=account_id)
         return DeactivateAccountResponse(id=account.id, status=account.status)
-    except MailAccountNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mail account not found")
+    except MailAccountNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mail account not found"
+        ) from e
 
 
 @router.get(
@@ -236,7 +240,8 @@ async def list_messages(
             if not isinstance(sa_list, list):
                 sa_list = None
         except Exception:
-            pass
+            # Continue executing rather than failing the search
+            sa_list = None
 
     req = MailSearchRequest(
         page_size=page_size,

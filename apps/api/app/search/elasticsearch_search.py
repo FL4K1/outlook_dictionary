@@ -59,6 +59,9 @@ class ElasticsearchSearchAdapter:
                 body = response.json()
                 return body  # type: ignore[no-any-return]
 
+            if response.status_code == 404:
+                return {}
+
             if response.status_code == 400:
                 logger.warning("ES 400 Invalid Query: %s", response.text[:200])
                 raise SearchInvalidQueryError("The search query was rejected.")

@@ -40,7 +40,6 @@ def init_dependencies(settings: Settings) -> None:
     )
     _session_factory = AsyncSessionFactory(_engine)
 
-
     _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
 
 

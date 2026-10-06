@@ -14,6 +14,8 @@ x-mip-shared-env: &mip-shared-env
   # (PR-3.3 / M10, H10): apps/api/alembic/env.py resolves the URL only from the
   # Alembic config, so mip_workers.migrations injects it programmatically.
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mip}:${POSTGRES_PASSWORD:-mip_dev_password}@postgres:5432/${POSTGRES_DB:-mail_intelligence}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
 
   REDIS_HOST: redis
   REDIS_PORT: "6379"

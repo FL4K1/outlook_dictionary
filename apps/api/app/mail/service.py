@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +18,8 @@ from mip_models.mail import (
 from mip_models.user import Identity
 
 if TYPE_CHECKING:
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from app.auth.context import AuthenticationContext
@@ -196,7 +197,6 @@ class MailLifecycleService:
         folders = (await self.db.execute(stmt)).scalars().all()
         if not folders:
             return 0
-
 
         enqueued = 0
         for f in folders:

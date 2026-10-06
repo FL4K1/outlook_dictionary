@@ -424,7 +424,9 @@ async def test_m9_public_error_sanitization() -> None:
         mock_sf_get.return_value = MagicMock(get_session=MagicMock(return_value=mock_session_gen()))
 
         app = create_app(settings=Settings())
-        app.dependency_overrides[SearchService] = mock_failing_search_service
+        from app.api.search.router import get_search_service
+
+        app.dependency_overrides[get_search_service] = mock_failing_search_service
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as test_client:

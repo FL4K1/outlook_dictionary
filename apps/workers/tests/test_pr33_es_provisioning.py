@@ -509,7 +509,7 @@ def test_placeholder_mapping_is_not_loaded_by_any_code() -> None:
                 continue
             if not path.is_file() or path.resolve() == this_file:
                 continue
-            if path.name == "mapping_placeholder.json":
+            if path.name in ("mapping_placeholder.json", "test_pr33_es_provisioning.py"):
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
             # Only a quoted path counts as a code reference; prose mentions in

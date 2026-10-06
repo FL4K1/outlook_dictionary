@@ -410,7 +410,8 @@ class NaturalLanguageSearchService:
 
                 if len(emails) > 1:
                     raise EntityAmbiguityError(
-                        f"Participant hint '{name}' matched multiple candidates. Please be more specific."
+                        f"Participant hint '{name}' matched multiple candidates. "
+                        "Please be more specific."
                     )
                 if len(emails) == 0:
                     raise EntityResolutionError(

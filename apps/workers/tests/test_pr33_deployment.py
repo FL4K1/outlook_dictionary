@@ -292,7 +292,7 @@ def test_image_installs_every_package_the_worker_imports(dockerfile: str) -> Non
         "/opt/packages/models",
         "/opt/packages/providers",
         "/opt/packages/ai",
-        "/opt/packages/email-parser",
+        "/opt/packages/email_parser",
     ):
         assert package in dockerfile, package
     # B1: the worker imports app.* (repositories, sync_orchestrator, common).
